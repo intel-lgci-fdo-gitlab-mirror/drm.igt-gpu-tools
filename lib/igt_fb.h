@@ -153,6 +153,12 @@ unsigned int igt_create_color_pattern_fb(int fd, int width, int height,
 					 uint32_t format, uint64_t modifier,
 					 double r, double g, double b,
 					 struct igt_fb *fb /* out */);
+unsigned int igt_create_color_pattern_fb_yuv(int fd, int width, int height,
+					     uint32_t format, uint64_t modifier,
+					     enum igt_color_encoding color_encoding,
+					     enum igt_color_range color_range,
+					     double r, double g, double b,
+					     struct igt_fb *fb /* out */);
 unsigned int igt_create_image_fb(int drm_fd,  int width, int height,
 				 uint32_t format, uint64_t modifier,
 				 const char *filename,

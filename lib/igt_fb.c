@@ -2404,6 +2404,47 @@ unsigned int igt_create_color_pattern_fb(int fd, int width, int height,
 }
 
 /**
+ * igt_create_color_pattern_fb_yuv:
+ * @fd: open drm file descriptor
+ * @width: width of the framebuffer in pixel
+ * @height: height of the framebuffer in pixel
+ * @format: drm fourcc pixel format code
+ * @modifier: tiling layout of the framebuffer
+ * @color_encoding: color encoding for YUV formats (e.g., BT.601, BT.709, BT.2020)
+ * @color_range: color range for YUV formats (limited or full range)
+ * @r: red value to use as background, 0.0 for black, 1.0 for red
+ * @g: green value to use as background, 0.0 for black, 1.0 for green
+ * @b: blue value to use as background, 0.0 for black, 1.0 for blue
+ * @fb: pointer to an #igt_fb structure
+ *
+ * This creates a framebuffer for YUV formats with the specified color encoding
+ * and range. Cairo is used to draw the background color and test pattern, with
+ * automatic RGB to YUV conversion based on the specified encoding and range.
+ *
+ * Returns:
+ * The kms id of the created framebuffer on success or a negative error code on
+ * failure.
+ */
+unsigned int igt_create_color_pattern_fb_yuv(int fd, int width, int height,
+					     uint32_t format, uint64_t modifier,
+					     enum igt_color_encoding color_encoding,
+					     enum igt_color_range color_range,
+					     double r, double g, double b,
+					     struct igt_fb *fb /* out */)
+{
+	unsigned int fb_id;
+
+	fb_id = igt_create_fb_with_bo_size(fd, width, height, format, modifier,
+					   color_encoding, color_range,
+					   fb, 0, 0);
+	igt_assert(fb_id);
+
+	igt_paint_test_pattern_color_fb(fd, fb, r, g, b);
+
+	return fb_id;
+}
+
+/**
  * igt_create_image_fb:
  * @drm_fd: open drm file descriptor
  * @width: width of the framebuffer in pixel or 0

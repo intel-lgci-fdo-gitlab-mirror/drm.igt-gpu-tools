@@ -259,6 +259,78 @@ void igt_color_multiply_inv_125(igt_pixel_t *pixel)
 	igt_color_multiply(pixel, 1 / 125.0f);
 }
 
+/**
+ * igt_color_extract_yuv_pixel - Extract raw Y, U, V values from YUV buffer
+ * @fb: framebuffer
+ * @x: x coordinate
+ * @y: y coordinate
+ * @y_plane: pointer to Y plane
+ * @uv_plane: pointer to UV plane
+ * @y_stride: stride of Y plane
+ * @uv_stride: stride of UV plane
+ * @out_y: output Y value (raw, not normalized)
+ * @out_u: output U value (raw, not normalized)
+ * @out_v: output V value (raw, not normalized)
+ *
+ * Extracts raw Y, U, V component values from a YUV framebuffer at the given
+ * coordinates. Handles 4:2:0 subsampling for UV components. Values are raw
+ * (not normalized) and format-specific.
+ */
+static void
+igt_color_extract_yuv_pixel(igt_fb_t *fb, int x, int y,
+			    uint8_t *y_plane, uint8_t *uv_plane,
+			    int y_stride, int uv_stride,
+			    uint32_t *out_y, uint32_t *out_u, uint32_t *out_v)
+{
+	if (fb->drm_format == DRM_FORMAT_NV12) {
+		*out_y = y_plane[y * y_stride + x];
+		*out_u = uv_plane[(y / 2) * uv_stride + (x / 2) * 2 + 0];
+		*out_v = uv_plane[(y / 2) * uv_stride + (x / 2) * 2 + 1];
+	} else if (fb->drm_format == DRM_FORMAT_P010) {
+		uint16_t *y16 = (uint16_t *)y_plane;
+		uint16_t *uv16 = (uint16_t *)uv_plane;
+
+		*out_y = y16[y * (y_stride / 2) + x];
+		*out_u = uv16[(y / 2) * (uv_stride / 2) + (x / 2) * 2 + 0];
+		*out_v = uv16[(y / 2) * (uv_stride / 2) + (x / 2) * 2 + 1];
+	} else {
+		igt_skip("YUV pixel format support not implemented");
+	}
+}
+
+/**
+ * igt_color_yuv_to_pixel - Convert raw Y, U, V values to normalized pixel
+ * @drm_format: YUV format (NV12 or P010)
+ * @raw_y: raw Y value
+ * @raw_u: raw U value
+ * @raw_v: raw V value
+ * @pixel: output pixel structure
+ *
+ * Converts raw Y, U, V component values to a normalized igt_pixel_t structure.
+ * For NV12 (8-bit), normalizes by 255. For P010 (10-bit in upper bits),
+ * shifts and normalizes by 1023.
+ *
+ * Result: pixel->r = normalized Y, pixel->g = normalized U, pixel->b = normalized V
+ */
+static void
+igt_color_yuv_to_pixel(uint32_t drm_format, uint32_t raw_y, uint32_t raw_u,
+		       uint32_t raw_v, igt_pixel_t *pixel)
+{
+	if (drm_format == DRM_FORMAT_NV12) {
+		/* Normalize 8-bit values to [0.0, 1.0] */
+		pixel->r = raw_y / 255.0f;
+		pixel->g = raw_u / 255.0f;
+		pixel->b = raw_v / 255.0f;
+	} else if (drm_format == DRM_FORMAT_P010) {
+		/* P010 uses upper 10 bits of 16-bit value */
+		pixel->r = (raw_y >> 6) / 1023.0f;
+		pixel->g = (raw_u >> 6) / 1023.0f;
+		pixel->b = (raw_v >> 6) / 1023.0f;
+	} else {
+		igt_skip("YUV pixel format support not implemented");
+	}
+}
+
 static int
 igt_get_lut3d_index_blue_fast(int r, int g, int b, long dim, int components)
 {

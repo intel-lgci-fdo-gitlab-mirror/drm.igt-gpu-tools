@@ -4,6 +4,7 @@
  */
 
 #include "kms_colorop_helper.h"
+#include "igt_color_encoding.h"
 
 const char * const kms_colorop_lut1d_tf_names[KMS_COLOROP_LUT1D_NUM_ENUMS] = {
 	[KMS_COLOROP_LUT1D_SRGB_EOTF] = "sRGB EOTF",
@@ -200,6 +201,48 @@ kms_colorop_t kms_colorop_3dlut_17_12_rgb = {
 	.transform = &igt_color_3dlut_17_12_rgb,
 };
 
+kms_colorop_t kms_colorop_bt709_limited_ycbcr_to_rgb = {
+	.type = KMS_COLOROP_FIXED_MATRIX,
+	.fixed_matrix_info = {
+		.fixed_matrix_type_name = "YCbCr 709 Limited to RGB",
+		.encoding = IGT_COLOR_YCBCR_BT709,
+		.range = IGT_COLOR_YCBCR_LIMITED_RANGE,
+	},
+	.name = "YCbCr BT.709 Limited Range to RGB",
+	.transform = NULL,
+};
+
+kms_colorop_t kms_colorop_bt709_full_ycbcr_to_rgb = {
+	.type = KMS_COLOROP_FIXED_MATRIX,
+	.fixed_matrix_info = {
+		.fixed_matrix_type_name = "YCbCr 709 Full to RGB",
+		.encoding = IGT_COLOR_YCBCR_BT709,
+		.range = IGT_COLOR_YCBCR_FULL_RANGE,
+	},
+	.name = "YCbCr BT.709 Full Range to RGB",
+	.transform = NULL,
+};
+
+kms_colorop_t kms_colorop_bt601_limited_ycbcr_to_rgb = {
+	.type = KMS_COLOROP_FIXED_MATRIX,
+	.fixed_matrix_info = {
+		.fixed_matrix_type_name = "YCbCr 601 Limited to RGB",
+		.encoding = IGT_COLOR_YCBCR_BT601,
+		.range = IGT_COLOR_YCBCR_LIMITED_RANGE,
+	},
+	.name = "YCbCr BT.601 Limited Range to RGB",
+	.transform = NULL,
+};
+
+kms_colorop_t kms_colorop_bt2020_limited_ycbcr_to_rgb = {
+	.type = KMS_COLOROP_FIXED_MATRIX,
+	.fixed_matrix_info = {
+		.fixed_matrix_type_name = "YCbCr 2020 Limited to RGB NC",
+	},
+	.name = "YCbCr BT.2020 Limited Range to RGB",
+	.transform = NULL,
+};
+
 static bool can_use_colorop(igt_display_t *display, igt_colorop_t *colorop, kms_colorop_t *desired)
 {
 	switch (desired->type) {
@@ -218,6 +261,11 @@ static bool can_use_colorop(igt_display_t *display, igt_colorop_t *colorop, kms_
 		return (igt_colorop_get_prop(display, colorop, IGT_COLOROP_TYPE) == DRM_COLOROP_MULTIPLIER);
 	case KMS_COLOROP_LUT3D:
 		return (igt_colorop_get_prop(display, colorop, IGT_COLOROP_TYPE) == DRM_COLOROP_3D_LUT);
+	case KMS_COLOROP_FIXED_MATRIX:
+		if (igt_colorop_get_prop(display, colorop, IGT_COLOROP_TYPE) == DRM_COLOROP_FIXED_MATRIX &&
+		    igt_colorop_try_prop_enum(colorop, IGT_COLOROP_FIXED_MATRIX, desired->fixed_matrix_info.fixed_matrix_type_name))
+			return true;
+		return false;
 	default:
 		return false;
 	}
@@ -361,6 +409,10 @@ static void set_colorop(igt_display_t *display, kms_colorop_t *colorop)
 		igt_skip_on(colorop->lut3d_info.interpolation != interpolation);
 
 		configure_3dlut(display, colorop, lut_size);
+		break;
+	case KMS_COLOROP_FIXED_MATRIX:
+		igt_colorop_set_prop_enum(colorop->colorop, IGT_COLOROP_FIXED_MATRIX,
+					  colorop->fixed_matrix_info.fixed_matrix_type_name);
 		break;
 	default:
 		igt_fail(IGT_EXIT_FAILURE);

@@ -13,6 +13,7 @@
 
 #include "drmtest.h"
 #include "igt_color.h"
+#include "igt_color_encoding.h"
 #include "igt_core.h"
 #include "igt_x86.h"
 
@@ -578,58 +579,159 @@ igt_color_pixel_to_fourcc(uint32_t drm_format, igt_pixel_t *pixel)
 	return raw_pixel;
 }
 
-int igt_color_transform_pixels(igt_fb_t *fb, igt_pixel_transform transforms[], int num_transforms)
+int igt_color_transform_pixels(igt_fb_t *input_fb, igt_fb_t *output_fb,
+				  igt_pixel_transform transforms[],
+				  int num_transforms,
+				  int yuv_encoding,
+				  enum igt_color_range yuv_range)
 {
-	uint32_t *line = NULL;
-	void *map;
-	char *ptr;
-	int x, y, cpp = igt_drm_format_to_bpp(fb->drm_format) / 8;
-	uint32_t stride = igt_fb_calc_plane_stride(fb, 0);
+	uint32_t *input_line = NULL;
+	uint32_t *output_line = NULL;
+	void *input_map, *output_map;
+	char *input_ptr, *output_ptr;
+	int x, y;
+	int input_cpp = 0;
+	int output_cpp = igt_drm_format_to_bpp(output_fb->drm_format) / 8;
+	uint32_t input_stride = 0, output_stride = igt_fb_calc_plane_stride(output_fb, 0);
+	uint8_t *y_plane = NULL, *uv_plane = NULL;
+	int y_stride = 0, uv_stride = 0;
+	bool input_is_yuv = (input_fb->drm_format == DRM_FORMAT_NV12 ||
+			     input_fb->drm_format == DRM_FORMAT_P010);
+	bool output_is_yuv = (output_fb->drm_format == DRM_FORMAT_NV12 ||
+			      output_fb->drm_format == DRM_FORMAT_P010);
+	struct igt_mat4 csc_matrix;
+	bool apply_csc = false;
 
-	if (fb->num_planes != 1)
+	/* Validate framebuffer dimensions match */
+	igt_assert(input_fb->width == output_fb->width);
+	igt_assert(input_fb->height == output_fb->height);
+
+	if (input_is_yuv && yuv_encoding >= 0) {
+		apply_csc = true;
+
+		csc_matrix = igt_ycbcr_to_rgb_matrix(input_fb->drm_format,
+						     output_fb->drm_format,
+						     yuv_encoding, yuv_range);
+	}
+
+	/* Validate plane counts */
+	if (!input_is_yuv && input_fb->num_planes != 1)
 		return -EINVAL;
 
-	ptr = igt_fb_map_buffer(fb->fd, fb);
-	igt_assert(ptr);
-	map = ptr;
+	if (input_is_yuv && input_fb->num_planes != 2)
+		return -EINVAL;
 
-	/*
-	 * Framebuffers are often uncached, which can make byte-wise accesses
-	 * very slow. We copy each line of the FB into a local buffer to speed
-	 * up the hashing.
-	 */
-	line = malloc(stride);
-	if (!line) {
-		munmap(map, fb->size);
+	if (!output_is_yuv && output_fb->num_planes != 1)
+		return -EINVAL;
+
+	if (output_is_yuv && output_fb->num_planes != 2)
+		return -EINVAL;
+
+	/* Map input buffer */
+	input_ptr = igt_fb_map_buffer(input_fb->fd, input_fb);
+	igt_assert(input_ptr);
+	input_map = input_ptr;
+
+	/* For YUV input, set up plane pointers */
+	if (input_is_yuv) {
+		y_plane = input_map;
+		y_stride = input_fb->strides[0];
+		uv_plane = y_plane + input_fb->offsets[1];
+		uv_stride = input_fb->strides[1];
+	} else {
+		input_cpp = igt_drm_format_to_bpp(input_fb->drm_format) / 8;
+		input_stride = igt_fb_calc_plane_stride(input_fb, 0);
+	}
+
+	/* Map output buffer */
+	output_ptr = igt_fb_map_buffer(output_fb->fd, output_fb);
+	igt_assert(output_ptr);
+	output_map = output_ptr;
+
+	/* Allocate line buffers for speed */
+	if (!input_is_yuv) {
+		input_line = malloc(input_stride);
+		if (!input_line) {
+			igt_fb_unmap_buffer(output_fb, output_map);
+			igt_fb_unmap_buffer(input_fb, input_map);
+			return -ENOMEM;
+		}
+	}
+
+	output_line = malloc(output_stride);
+	if (!output_line) {
+		free(input_line);
+		igt_fb_unmap_buffer(output_fb, output_map);
+		igt_fb_unmap_buffer(input_fb, input_map);
 		return -ENOMEM;
 	}
 
-	for (y = 0; y < fb->height; y++, ptr += stride) {
+	for (y = 0; y < input_fb->height; y++) {
+		/* For RGB input, read line from input buffer */
+		if (!input_is_yuv)
+			igt_memcpy_from_wc(input_line, input_ptr + y * input_stride,
+					   input_fb->width * input_cpp);
 
-		/* get line from buffer */
-		igt_memcpy_from_wc(line, ptr, fb->width * cpp);
-
-		for (x = 0; x < fb->width; x++) {
-			uint32_t raw_pixel = le32_to_cpu(line[x]);
+		for (x = 0; x < input_fb->width; x++) {
 			igt_pixel_t pixel;
 			int i;
+			int start_transform;
 
-			igt_color_fourcc_to_pixel(raw_pixel, fb->drm_format, &pixel);
+			/* READ from input buffer */
+			if (input_is_yuv) {
+				uint32_t raw_y, raw_u, raw_v;
+				struct igt_vec4 yuv, rgb;
 
-			/* run transform on pixel */
-			for (i = 0; i < num_transforms; i++)
-				transforms[i](&pixel);
+				/* Extract raw Y, U, V from YUV input buffer */
+				igt_color_extract_yuv_pixel(input_fb, x, y, y_plane, uv_plane,
+							    y_stride, uv_stride,
+							    &raw_y, &raw_u, &raw_v);
 
-			/* write back to line */
-			line[x] = cpu_to_le32(igt_color_pixel_to_fourcc(fb->drm_format, &pixel));
+				/* Convert YUV to RGB using pre-computed CSC matrix */
+				if (apply_csc) {
+					float rgb_max;
+
+					/* Matrix expects raw format values */
+					yuv.d[0] = raw_y;
+					yuv.d[1] = raw_u;
+					yuv.d[2] = raw_v;
+					yuv.d[3] = 1.0f;
+
+					rgb = igt_matrix_transform(&csc_matrix, &yuv);
+
+					rgb_max = (output_fb->drm_format == DRM_FORMAT_XRGB2101010) ? 1023.0f : 255.0f;
+
+					pixel.r = rgb.d[0] / rgb_max;
+					pixel.g = rgb.d[1] / rgb_max;
+					pixel.b = rgb.d[2] / rgb_max;
+				} else {
+					igt_color_yuv_to_pixel(input_fb->drm_format, raw_y, raw_u, raw_v, &pixel);
+				}
+			} else {
+				uint32_t raw_pixel = le32_to_cpu(input_line[x]);
+				igt_color_fourcc_to_pixel(raw_pixel, input_fb->drm_format, &pixel);
+			}
+
+			/* Transform pixel through remaining transforms */
+			/* Skip first transform if it was a CSC that we already applied */
+			start_transform = apply_csc ? 1 : 0;
+			for (i = start_transform; i < num_transforms; i++)
+				if (transforms[i])
+					transforms[i](&pixel);
+
+			/* write to output buffer */
+			output_line[x] = cpu_to_le32(igt_color_pixel_to_fourcc(output_fb->drm_format, &pixel));
 		}
 
-		/* copy line back to fb buffer */
-		igt_memcpy_from_wc(ptr, line, fb->width * cpp);
+		/* Copy output line to output buffer */
+		igt_memcpy_from_wc(output_ptr + y * output_stride, output_line,
+			      output_fb->width * output_cpp);
 	}
 
-	free(line);
-	igt_fb_unmap_buffer(fb, map);
+	free(output_line);
+	free(input_line);
+	igt_fb_unmap_buffer(output_fb, output_map);
+	igt_fb_unmap_buffer(input_fb, input_map);
 
 	return 0;
 }

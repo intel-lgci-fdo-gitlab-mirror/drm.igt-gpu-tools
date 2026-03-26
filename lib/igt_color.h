@@ -72,7 +72,11 @@ void igt_dump_fb(igt_display_t *display, igt_fb_t *fb, const char *path_name, co
 
 typedef void (*igt_pixel_transform)(igt_pixel_t *pixel);
 
-int igt_color_transform_pixels(igt_fb_t *fb, igt_pixel_transform transforms[], int num_transforms);
+int igt_color_transform_pixels(igt_fb_t *input_fb, igt_fb_t *output_fb,
+			       igt_pixel_transform transforms[],
+			       int num_transforms,
+			       int yuv_encoding,
+			       enum igt_color_range yuv_range);
 
 /* colorop helpers */
 

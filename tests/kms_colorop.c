@@ -195,15 +195,25 @@ static bool compare_with_bracket(igt_fb_t *in, igt_fb_t *out)
 
 #define MAX_COLOROPS 5
 
-static void apply_transforms(kms_colorop_t *colorops[], igt_fb_t *sw_transform_fb)
+static void apply_transforms(kms_colorop_t *colorops[], igt_fb_t *input_fb,
+			     igt_fb_t *sw_transform_fb)
 {
 	int i;
+	int yuv_encoding = -1;
+	enum igt_color_range yuv_range = IGT_COLOR_YCBCR_LIMITED_RANGE;
 	igt_pixel_transform transforms[MAX_COLOROPS];
 
 	for (i = 0; colorops[i]; i++)
 		transforms[i] = colorops[i]->transform;
 
-	igt_color_transform_pixels(sw_transform_fb, transforms, i);
+	/* If first colorop is CSC FF, extract encoding/range for sw reference */
+	if (colorops[0] && colorops[0]->type == KMS_COLOROP_FIXED_MATRIX) {
+		yuv_encoding = colorops[0]->fixed_matrix_info.encoding;
+		yuv_range = colorops[0]->fixed_matrix_info.range;
+	}
+
+	igt_color_transform_pixels(input_fb, sw_transform_fb, transforms, i,
+				   yuv_encoding, yuv_range);
 }
 
 static void colorop_plane_test(igt_display_t *display,
@@ -217,10 +227,7 @@ static void colorop_plane_test(igt_display_t *display,
 {
 	igt_colorop_t *color_pipeline = NULL;
 	igt_fb_t sw_transform_fb;
-	igt_crc_t input_crc, output_crc;
 	int res;
-
-	igt_fb_get_fnv1a_crc(input_fb, &input_crc);
 
 	/* reset color pipeline*/
 
@@ -235,18 +242,15 @@ static void colorop_plane_test(igt_display_t *display,
 				NULL);
 	igt_get_and_wait_out_fence(output);
 
-	/* Compare input and output buffers. They should be equal here. */
-	igt_fb_get_fnv1a_crc(output_fb, &output_crc);
-
-	igt_assert_crc_equal(&input_crc, &output_crc);
-
-	/* create sw transformed buffer */
-	res = igt_copy_fb(display->drm_fd, input_fb, &sw_transform_fb);
+	/* create sw transform buffer with output format */
+	res = igt_create_fb(display->drm_fd,
+			    input_fb->width, input_fb->height,
+			    output_fb->drm_format,
+			    DRM_FORMAT_MOD_LINEAR,
+			    &sw_transform_fb);
 	igt_assert_lte(0, res);
 
-	igt_assert(igt_cmp_fb_pixels(input_fb, &sw_transform_fb, 0, 0));
-
-	apply_transforms(colorops, &sw_transform_fb);
+	apply_transforms(colorops, input_fb, &sw_transform_fb);
 
 	if (data.dump_check)
 		igt_dump_fb(display, &sw_transform_fb, ".", "sw_transform");

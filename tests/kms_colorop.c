@@ -80,6 +80,16 @@
  * SUBTEST: plane-XR30-XR30-multiply_125
  * SUBTEST: plane-XR30-XR30-multiply_inv_125
  * SUBTEST: plane-XR30-XR30-3dlut_17_12_rgb
+ * SUBTEST: plane-bypass-XR24-XR24-srgb_eotf
+ * SUBTEST: plane-bypass-XR24-XR24-srgb_inv_eotf_lut
+ * SUBTEST: plane-bypass-XR24-XR24-ctm_3x4_50_desat
+ * SUBTEST: plane-bypass-XR24-XR24-3dlut_17_12_rgb
+ * SUBTEST: plane-bypass-XR24-XR24-srgb_eotf-ctm_3x4_50_desat
+ * SUBTEST: plane-bypass-XR30-XR30-srgb_eotf
+ * SUBTEST: plane-bypass-XR30-XR30-srgb_inv_eotf_lut
+ * SUBTEST: plane-bypass-XR30-XR30-ctm_3x4_50_desat
+ * SUBTEST: plane-bypass-XR30-XR30-3dlut_17_12_rgb
+ * SUBTEST: plane-bypass-XR30-XR30-srgb_eotf-ctm_3x4_50_desat
  * Description: Tests DRM colorop properties on RGB formats
  * Driver requirement: amdgpu
  * Functionality: kms_core
@@ -268,7 +278,8 @@ static void colorop_plane_test(igt_display_t *display,
 			       igt_fb_t *output_fb,
 			       __u32 fourcc_in,
 			       __u32 fourcc_out,
-			       kms_colorop_t *colorops[])
+			       kms_colorop_t *colorops[],
+			       bool verify_bypass)
 {
 	igt_colorop_t *color_pipeline = NULL;
 	igt_fb_t sw_transform_fb;
@@ -329,17 +340,26 @@ static void colorop_plane_test(igt_display_t *display,
 	/* compare sw transformed and KMS transformed FBs */
 	igt_assert(compare_with_bracket(&sw_transform_fb, output_fb));
 
-	/* reset color pipeline*/
-	set_color_pipeline_bypass(plane);
+	/* Test bypass transition if requested */
+	if (verify_bypass) {
+		/* reset color pipeline*/
+		set_color_pipeline_bypass(plane);
 
-	/* Commit */
-	igt_plane_set_fb(plane, input_fb);
-	igt_output_set_writeback_fb(output, output_fb);
+		/* Commit */
+		igt_plane_set_fb(plane, input_fb);
+		igt_output_set_writeback_fb(output, output_fb);
 
-	igt_display_commit_atomic(output->display,
-				DRM_MODE_ATOMIC_ALLOW_MODESET,
-				NULL);
-	igt_get_and_wait_out_fence(output);
+		igt_display_commit_atomic(output->display,
+					DRM_MODE_ATOMIC_ALLOW_MODESET,
+					NULL);
+		igt_get_and_wait_out_fence(output);
+
+		if (data.dump_check)
+			igt_dump_fb(display, output_fb, ".", "bypass_output");
+
+		/* For RGB bypass, output should match input */
+		igt_assert(compare_with_bracket(input_fb, output_fb));
+	}
 }
 
 static void check_plane_colorop_ids(igt_display_t *display)
@@ -463,6 +483,20 @@ int igt_main_args("d", long_options, help_str, opt_handler, NULL)
 		{ { &kms_colorop_bt709_limited_ycbcr_to_rgb, &kms_colorop_srgb_eotf, &kms_colorop_ctm_3x4_50_desat, NULL }, "fm_bt709_limited-srgb_eotf-ctm_3x4_50_desat" },
 	};
 
+	/* Bypass transition tests - test config -> bypass -> verify identity (RGB only) */
+	struct {
+		kms_colorop_t *colorops[MAX_COLOROPS];
+		const char *name;
+	} tests_bypass_transitions_rgb[] = {
+		/* One per colorop type */
+		{ { &kms_colorop_srgb_eotf, NULL }, "srgb_eotf" },
+		{ { &kms_colorop_srgb_inv_eotf_lut, NULL }, "srgb_inv_eotf_lut" },
+		{ { &kms_colorop_ctm_3x4_50_desat, NULL }, "ctm_3x4_50_desat" },
+		{ { &kms_colorop_3dlut_17_12_rgb, NULL }, "3dlut_17_12_rgb" },
+		/* Multi-stage */
+		{ { &kms_colorop_srgb_eotf, &kms_colorop_ctm_3x4_50_desat, NULL }, "srgb_eotf-ctm_3x4_50_desat" },
+	};
+
 	struct {
 		__u32 fourcc_in;
 		__u32 fourcc_out;
@@ -565,7 +599,75 @@ int igt_main_args("d", long_options, help_str, opt_handler, NULL)
 							&output_fb,
 							formats_rgb[j].fourcc_in,
 							formats_rgb[j].fourcc_out,
-							tests_rgb[i].colorops);
+							tests_rgb[i].colorops,
+							false);
+			}
+
+			igt_fixture() {
+				igt_detach_crtc(&display, output);
+				igt_remove_fb(display.drm_fd, &input_fb);
+				igt_remove_fb(display.drm_fd, &output_fb);
+
+			}
+		}
+	}
+
+	/* Bypass transition tests - RGB formats */
+	for (j = 0; j < ARRAY_SIZE(formats_rgb); j++) {
+		igt_output_t *output;
+		igt_plane_t *plane;
+		igt_fb_t input_fb, output_fb;
+		unsigned int fb_id;
+		drmModeModeInfo mode;
+
+		igt_subtest_group() {
+			igt_fixture() {
+				output = kms_writeback_get_output(&display,
+								  formats_rgb[j].fourcc_in,
+								  formats_rgb[j].fourcc_out);
+				igt_require(output);
+
+				if (output->use_override_mode)
+					memcpy(&mode, &output->override_mode, sizeof(mode));
+				else
+					memcpy(&mode, &output->config.default_mode, sizeof(mode));
+
+				/* create input fb */
+				plane = igt_output_get_plane_type(output, DRM_PLANE_TYPE_PRIMARY);
+				igt_assert(plane);
+				igt_require(igt_plane_has_prop(plane, IGT_PLANE_COLOR_PIPELINE));
+
+				fb_id = igt_create_color_pattern_fb(display.drm_fd,
+								mode.hdisplay, mode.vdisplay,
+								formats_rgb[j].fourcc_in, DRM_FORMAT_MOD_LINEAR,
+								0.2, 0.2, 0.2, &input_fb);
+				igt_assert(fb_id >= 0);
+				igt_plane_set_fb(plane, &input_fb);
+
+				if (data.dump_check)
+					igt_dump_fb(&display, &input_fb, ".", "input");
+
+				/* create output fb */
+				fb_id = igt_create_fb(display.drm_fd, mode.hdisplay, mode.vdisplay,
+							formats_rgb[j].fourcc_out,
+							igt_fb_mod_to_tiling(0),
+							&output_fb);
+				igt_require(fb_id > 0);
+			}
+
+			/* Run bypass transition tests */
+			for (i = 0; i < ARRAY_SIZE(tests_bypass_transitions_rgb); i++) {
+				igt_describe("Test color pipeline to bypass transition");
+				igt_subtest_f("plane-bypass-%s-%s", formats_rgb[j].name, tests_bypass_transitions_rgb[i].name)
+					colorop_plane_test(&display,
+							output,
+							plane,
+							&input_fb,
+							&output_fb,
+							formats_rgb[j].fourcc_in,
+							formats_rgb[j].fourcc_out,
+							tests_bypass_transitions_rgb[i].colorops,
+							true);
 			}
 
 			igt_fixture() {
@@ -649,7 +751,8 @@ int igt_main_args("d", long_options, help_str, opt_handler, NULL)
 							&output_fb,
 							formats_yuv[j].fourcc_in,
 							formats_yuv[j].fourcc_out,
-							tests_yuv[i].colorops);
+							tests_yuv[i].colorops,
+							false);
 
 					/* Switch plane back to temp_fb to keep CRTC active */
 					igt_plane_set_fb(plane, &temp_fb);

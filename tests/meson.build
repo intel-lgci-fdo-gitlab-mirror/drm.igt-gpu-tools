@@ -464,6 +464,9 @@ intel_progs = intel_i915_xe_progs
 intel_progs += intel_i915_progs + intel_kms_progs
 if build_xe
 	intel_progs += intel_xe_progs
+	extra_dependencies += {
+		'xe_exec_capture': [ dependency('libzstd') ],
+	}
 endif
 
 foreach prog : intel_progs

@@ -1,9 +1,4 @@
 ##################################################################
-# SR-IOV/IOV tests are not applicable for native
-# configuration and will be run under its separate configuration
-##################################################################
-igt@.*iov.*
-##################################################################
 # All Display related tests are being run under
 # separate display configurations
 ##################################################################

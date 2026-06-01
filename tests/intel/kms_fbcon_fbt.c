@@ -297,18 +297,16 @@ static inline void psr_debugfs_enable(int device, int debugfs_fd)
 static void fbc_skips_on_fbcon(int debugfs_fd)
 {
 	const char *reasons[] = {
-		"incompatible mode",
-		"mode too large for compression",
-		"framebuffer not tiled or fenced",
-		"pixel format is invalid",
-		"rotation unsupported",
-		"tiling unsupported",
-		"framebuffer stride not supported",
-		"per-pixel alpha blending is incompatible with FBC",
-		"pixel rate is too big",
-		"CFB requirements changed",
-		"plane Y offset is misaligned",
-		"plane height + offset is non-modulo of 4"
+		"pixel format not supported",
+		"tiling not supported",
+		"rotation not supported",
+		"stride not supported",
+		"per-pixel alpha not supported",
+		"plane size too big",
+		"surface size too big",
+		"plane start Y offset misaligned",
+		"plane end Y offset misaligned",
+		"pixel rate too high"
 	};
 	bool skip = false;
 	char buf[FBC_STATUS_BUF_LEN];

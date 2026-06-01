@@ -1633,13 +1633,13 @@ static void drrs_print_status(void)
 static struct timespec fbc_get_last_action(void)
 {
 	struct timespec ret = { 0, 0 };
-	char buf[128];
+	char fbc_status[128];
 	char *action;
 	ssize_t n_read;
 
+	intel_fbc_get_status(prim_mode_params.crtc, fbc_status, sizeof(fbc_status));
 
-	debugfs_read_crtc("i915_fbc_status", buf);
-	action = strstr(buf, "\nLast action:");
+	action = strstr(fbc_status, "\nLast action:");
 	igt_assert(action);
 
 	n_read = sscanf(action, "Last action: %ld.%ld",
@@ -1683,12 +1683,12 @@ static void fbc_update_last_action(void)
 static void fbc_setup_last_action(void)
 {
 	ssize_t n_read;
-	char buf[128];
+	char fbc_status[128];
 	char *action;
 
+	intel_fbc_get_status(prim_mode_params.crtc, fbc_status, sizeof(fbc_status));
 
-	debugfs_read_crtc("i915_fbc_status", buf);
-	action = strstr(buf, "\nLast action:");
+	action = strstr(fbc_status, "\nLast action:");
 	if (!action) {
 		igt_info("FBC last action not supported\n");
 		return;
@@ -1703,10 +1703,11 @@ static void fbc_setup_last_action(void)
 
 static bool fbc_is_compressing(void)
 {
-	char buf[128];
+	char fbc_status[128];
 
-	debugfs_read_crtc("i915_fbc_status", buf);
-	return strstr(buf, "\nCompressing: yes\n") != NULL;
+	intel_fbc_get_status(prim_mode_params.crtc, fbc_status, sizeof(fbc_status));
+
+	return strstr(fbc_status, "\nCompressing: yes\n");
 }
 
 static bool fbc_wait_for_compression(void)
@@ -1716,45 +1717,50 @@ static bool fbc_wait_for_compression(void)
 
 static bool fbc_not_enough_stolen(void)
 {
-	char buf[128];
+	char fbc_status[128];
 
-	debugfs_read_crtc("i915_fbc_status", buf);
-	return strstr(buf, "FBC disabled: not enough stolen memory\n");
+	intel_fbc_get_status(prim_mode_params.crtc, fbc_status, sizeof(fbc_status));
+
+	return strstr(fbc_status, "FBC disabled: not enough stolen memory\n");
 }
 
 static bool fbc_stride_not_supported(void)
 {
-	char buf[128];
+	char fbc_status[128];
 
-	debugfs_read_crtc("i915_fbc_status", buf);
-	return strstr(buf, "FBC disabled: framebuffer stride not supported\n");
+	intel_fbc_get_status(prim_mode_params.crtc, fbc_status, sizeof(fbc_status));
+
+	return strstr(fbc_status, "FBC disabled: framebuffer stride not supported\n");
 }
 
 static bool fbc_mode_too_large(void)
 {
-	char buf[128];
+	char fbc_status[128];
 
-	debugfs_read_crtc("i915_fbc_status", buf);
-	return strstr(buf, "FBC disabled: mode too large for compression\n");
+	intel_fbc_get_status(prim_mode_params.crtc, fbc_status, sizeof(fbc_status));
+
+	return strstr(fbc_status, "FBC disabled: mode too large for compression\n");
 }
 
 static bool fbc_psr_not_possible(void)
 {
-	char buf[128];
+	char fbc_status[128];
 
-	debugfs_read_crtc("i915_fbc_status", buf);
-	return strstr(buf, "FBC disabled: PSR1 enabled (Wa_14016291713)");
+	intel_fbc_get_status(prim_mode_params.crtc, fbc_status, sizeof(fbc_status));
+
+	return strstr(fbc_status, "FBC disabled: PSR1 enabled (Wa_14016291713)");
 }
 
 static bool fbc_enable_per_plane(int plane_index, igt_crtc_t *crtc)
 {
-	char buf[PATH_MAX];
+	char fbc_status[PATH_MAX];
 	char buf_plane[128];
 
 	sprintf(buf_plane, "%d%s", plane_index, igt_crtc_name(crtc));
 
-	debugfs_read_crtc("i915_fbc_status", buf);
-	return strstr(strstr(buf, "*"), buf_plane);
+	intel_fbc_get_status(prim_mode_params.crtc, fbc_status, sizeof(fbc_status));
+
+	return strstr(strstr(fbc_status, "*"), buf_plane);
 }
 
 static bool drrs_wait_until_rr_switch_to_low(void)

@@ -1730,16 +1730,25 @@ static bool fbc_stride_not_supported(void)
 
 	intel_fbc_get_status(prim_mode_params.crtc, fbc_status, sizeof(fbc_status));
 
-	return strstr(fbc_status, "FBC disabled: framebuffer stride not supported\n");
+	return strstr(fbc_status, "FBC disabled: stride not supported\n");
 }
 
-static bool fbc_mode_too_large(void)
+static bool fbc_plane_size_too_big(void)
 {
 	char fbc_status[128];
 
 	intel_fbc_get_status(prim_mode_params.crtc, fbc_status, sizeof(fbc_status));
 
-	return strstr(fbc_status, "FBC disabled: mode too large for compression\n");
+	return strstr(fbc_status, "FBC disabled: plane size too big\n");
+}
+
+static bool fbc_surface_size_too_big(void)
+{
+	char fbc_status[128];
+
+	intel_fbc_get_fbc_status(prim_mode_params.crtc, fbc_status, sizeof(fbc_status));
+
+	return strstr(fbc_status, "FBC disabled: surface size too big\n");
 }
 
 static bool fbc_psr_not_possible(void)
@@ -2505,7 +2514,8 @@ static void do_status_assertions(int flags)
 	if (flags & ASSERT_FBC_ENABLED) {
 		igt_require(!fbc_not_enough_stolen());
 		igt_require(!fbc_stride_not_supported());
-		igt_require(!fbc_mode_too_large());
+		igt_require(!fbc_plane_size_too_big());
+		igt_require(!fbc_surface_size_too_big());
 		igt_require(!fbc_psr_not_possible());
 		if (!intel_fbc_wait_until_enabled(prim_mode_params.crtc)) {
 			igt_assert_f(intel_fbc_is_enabled(prim_mode_params.crtc, IGT_LOG_WARN),

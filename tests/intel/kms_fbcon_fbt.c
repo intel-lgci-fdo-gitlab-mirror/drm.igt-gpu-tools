@@ -83,12 +83,9 @@ static void wait_user(const char *msg)
 static bool fbc_supported_on_chipset(struct drm_info *drm)
 {
 	char buf[FBC_STATUS_BUF_LEN];
-	int ret;
 
-	ret = igt_debugfs_simple_read(drm->debugfs_fd, "i915_fbc_status",
-				      buf, sizeof(buf));
-	if (ret < 0)
-		return false;
+	intel_fbc_get_status_crtc_index(drm->fd, drm->crtc_index, buf,
+					sizeof(buf));
 
 	return !strstr(buf, "FBC unsupported on this chipset\n") &&
 		!strstr(buf, "stolen memory not initialised\n");
@@ -103,8 +100,9 @@ static void fbc_print_status(struct drm_info *drm)
 {
 	static char buf[FBC_STATUS_BUF_LEN];
 
-	igt_debugfs_simple_read(drm->debugfs_fd, "i915_fbc_status", buf,
-				sizeof(buf));
+	intel_fbc_get_status_crtc_index(drm->fd, drm->crtc_index, buf,
+					sizeof(buf));
+
 	igt_debug("FBC status: %s\n", buf);
 }
 
@@ -112,8 +110,9 @@ static bool fbc_check_status(struct drm_info *drm, bool enabled)
 {
 	char buf[FBC_STATUS_BUF_LEN];
 
-	igt_debugfs_simple_read(drm->debugfs_fd, "i915_fbc_status", buf,
-				sizeof(buf));
+	intel_fbc_get_status_crtc_index(drm->fd, drm->crtc_index, buf,
+					sizeof(buf));
+
 	if (enabled)
 		return strstr(buf, "FBC enabled\n");
 	else

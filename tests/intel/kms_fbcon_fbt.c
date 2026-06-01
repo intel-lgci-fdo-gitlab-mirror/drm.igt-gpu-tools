@@ -33,6 +33,7 @@
  * Mega feature: General Display Features
  */
 
+#include "i915/intel_fbc.h"
 #include "igt.h"
 #include "igt_device.h"
 #include "igt_psr.h"
@@ -81,7 +82,7 @@ static void wait_user(const char *msg)
 
 static bool fbc_supported_on_chipset(int device, int debugfs_fd)
 {
-	char buf[128];
+	char buf[FBC_STATUS_BUF_LEN];
 	int ret;
 
 	ret = igt_debugfs_simple_read(debugfs_fd, "i915_fbc_status",
@@ -100,7 +101,7 @@ static bool connector_can_fbc(drmModeConnectorPtr connector)
 
 static void fbc_print_status(int debugfs_fd)
 {
-	static char buf[128];
+	static char buf[FBC_STATUS_BUF_LEN];
 
 	igt_debugfs_simple_read(debugfs_fd, "i915_fbc_status", buf,
 				sizeof(buf));
@@ -109,7 +110,7 @@ static void fbc_print_status(int debugfs_fd)
 
 static bool fbc_check_status(int debugfs_fd, bool enabled)
 {
-	char buf[128];
+	char buf[FBC_STATUS_BUF_LEN];
 
 	igt_debugfs_simple_read(debugfs_fd, "i915_fbc_status", buf,
 				sizeof(buf));
@@ -310,7 +311,7 @@ static void fbc_skips_on_fbcon(int debugfs_fd)
 		"plane height + offset is non-modulo of 4"
 	};
 	bool skip = false;
-	char buf[128];
+	char buf[FBC_STATUS_BUF_LEN];
 	int i;
 
 	igt_debugfs_simple_read(debugfs_fd, "i915_fbc_status", buf, sizeof(buf));

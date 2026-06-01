@@ -1633,7 +1633,7 @@ static void drrs_print_status(void)
 static struct timespec fbc_get_last_action(void)
 {
 	struct timespec ret = { 0, 0 };
-	char fbc_status[128];
+	char fbc_status[FBC_STATUS_BUF_LEN];
 	char *action;
 	ssize_t n_read;
 
@@ -1683,7 +1683,7 @@ static void fbc_update_last_action(void)
 static void fbc_setup_last_action(void)
 {
 	ssize_t n_read;
-	char fbc_status[128];
+	char fbc_status[FBC_STATUS_BUF_LEN];
 	char *action;
 
 	intel_fbc_get_status(prim_mode_params.crtc, fbc_status, sizeof(fbc_status));
@@ -1703,7 +1703,7 @@ static void fbc_setup_last_action(void)
 
 static bool fbc_is_compressing(void)
 {
-	char fbc_status[128];
+	char fbc_status[FBC_STATUS_BUF_LEN];
 
 	intel_fbc_get_status(prim_mode_params.crtc, fbc_status, sizeof(fbc_status));
 

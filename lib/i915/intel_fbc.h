@@ -8,6 +8,8 @@
 
 #include "igt.h"
 
+#define FBC_STATUS_BUF_LEN 512
+
 enum psr_mode;
 
 void intel_fbc_enable(igt_display_t *display);

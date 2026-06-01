@@ -23,6 +23,47 @@ void intel_fbc_disable(igt_display_t *display)
 }
 
 /**
+ * intel_fbc_get_status_crtc_index
+ * @device: fd of the device
+ * @crtc: crtc index
+ * @fbc_status: Buffer to fill the current fbc status
+ * @buf_size: Size of the buffer to be filled
+ *
+ * Read the debugfs entry for current fbc status of a crtc
+ *
+ * Returns:
+ * None
+ */
+void intel_fbc_get_status_crtc_index(int device, int crtc_index,
+				     char *fbc_status, int buf_size)
+{
+	int dir;
+
+	dir = igt_debugfs_crtc_dir(device, crtc_index);
+	igt_require_fd(dir);
+	igt_debugfs_simple_read(dir, "i915_fbc_status", fbc_status, buf_size);
+	close(dir);
+}
+
+/**
+ * intel_fbc_get_status
+ * @crtc: CRTC
+ * @fbc_status: Buffer to fill the current fbc status
+ * @buf_size: Size of the buffer to be filled
+ *
+ * Read the debugfs entry for current fbc status of a crtc
+ *
+ * Returns:
+ * None
+ */
+void intel_fbc_get_status(igt_crtc_t *crtc, char *fbc_status, int buf_size)
+{
+	intel_fbc_get_status_crtc_index(crtc->display->drm_fd,
+					crtc->crtc_index, fbc_status,
+					buf_size);
+}
+
+/**
  * intel_fbc_supported:
  * @crtc: CRTC
  *
@@ -34,12 +75,9 @@ void intel_fbc_disable(igt_display_t *display)
 bool intel_fbc_supported(igt_crtc_t *crtc)
 {
 	char buf[FBC_STATUS_BUF_LEN];
-	int dir;
 
-	dir = igt_crtc_debugfs_dir(crtc);
-	igt_require_fd(dir);
-	igt_debugfs_simple_read(dir, "i915_fbc_status", buf, sizeof(buf));
-	close(dir);
+	intel_fbc_get_status(crtc, buf, sizeof(buf));
+
 	if (*buf == '\0')
 		return false;
 
@@ -51,12 +89,9 @@ static bool _intel_fbc_is_enabled(igt_crtc_t *crtc, int log_level, char *last_fb
 {
 	char buf[FBC_STATUS_BUF_LEN];
 	bool print = true;
-	int dir;
 
-	dir = igt_crtc_debugfs_dir(crtc);
-	igt_require_fd(dir);
-	igt_debugfs_simple_read(dir, "i915_fbc_status", buf, sizeof(buf));
-	close(dir);
+	intel_fbc_get_status(crtc, buf, sizeof(buf));
+
 	if (log_level != IGT_LOG_DEBUG)
 		last_fbc_buf[0] = '\0';
 	else if (strcmp(last_fbc_buf, buf))

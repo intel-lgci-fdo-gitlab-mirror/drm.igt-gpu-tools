@@ -297,30 +297,8 @@ static inline void psr_debugfs_enable(struct drm_info *drm)
 
 static void fbc_skips_on_fbcon(struct drm_info *drm)
 {
-	const char *reasons[] = {
-		"pixel format not supported",
-		"tiling not supported",
-		"rotation not supported",
-		"stride not supported",
-		"per-pixel alpha not supported",
-		"plane size too big",
-		"surface size too big",
-		"plane start Y offset misaligned",
-		"plane end Y offset misaligned",
-		"pixel rate too high"
-	};
-	bool skip = false;
-	char buf[FBC_STATUS_BUF_LEN];
-	int i;
-
-	igt_debugfs_simple_read(drm->debugfs_fd, "i915_fbc_status", buf, sizeof(buf));
-	if (strstr(buf, "FBC enabled\n"))
-		return;
-
-	for (i = 0; skip == false && i < ARRAY_SIZE(reasons); i++)
-		skip = strstr(buf, reasons[i]);
-
-	igt_skip_on_f(skip, "fbcon modeset is not compatible with FBC\n");
+	igt_skip_on_f(intel_fbc_found_skip_reason(drm->fd, drm->crtc_index),
+		      "fbcon modeset is not compatible with FBC\n");
 }
 
 static void psr_skips_on_fbcon(struct drm_info *drm)

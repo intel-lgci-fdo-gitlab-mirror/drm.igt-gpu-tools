@@ -77,10 +77,17 @@ bool intel_fbc_found_skip_reason(int device, int crtc_index)
 {
 	const char *const no_fbc_reasons[] = {
 		"FBC disabled: not enough stolen memory",
+		"FBC disabled: pixel format not supported",
+		"FBC disabled: tiling not supported",
+		"FBC disabled: rotation not supported",
 		"FBC disabled: stride not supported",
+		"FBC disabled: per-pixel alpha not supported",
 		"FBC disabled: plane size too big",
 		"FBC disabled: surface size too big",
-		"FBC disabled: PSR1 enabled (Wa_14016291713)"
+		"FBC disabled: PSR1 enabled (Wa_14016291713)",
+		"FBC disabled: plane start Y offset misaligned",
+		"FBC disabled: plane end Y offset misaligned",
+		"FBC disabled: pixel rate too high"
 	};
 	bool found_reason = false;
 	char fbc_status[FBC_STATUS_BUF_LEN];

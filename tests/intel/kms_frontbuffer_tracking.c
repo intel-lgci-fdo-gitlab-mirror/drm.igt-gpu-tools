@@ -1715,51 +1715,6 @@ static bool fbc_wait_for_compression(void)
 	return igt_wait(fbc_is_compressing(), 2000, 1);
 }
 
-static bool fbc_not_enough_stolen(void)
-{
-	char fbc_status[128];
-
-	intel_fbc_get_status(prim_mode_params.crtc, fbc_status, sizeof(fbc_status));
-
-	return strstr(fbc_status, "FBC disabled: not enough stolen memory\n");
-}
-
-static bool fbc_stride_not_supported(void)
-{
-	char fbc_status[128];
-
-	intel_fbc_get_status(prim_mode_params.crtc, fbc_status, sizeof(fbc_status));
-
-	return strstr(fbc_status, "FBC disabled: stride not supported\n");
-}
-
-static bool fbc_plane_size_too_big(void)
-{
-	char fbc_status[128];
-
-	intel_fbc_get_status(prim_mode_params.crtc, fbc_status, sizeof(fbc_status));
-
-	return strstr(fbc_status, "FBC disabled: plane size too big\n");
-}
-
-static bool fbc_surface_size_too_big(void)
-{
-	char fbc_status[128];
-
-	intel_fbc_get_fbc_status(prim_mode_params.crtc, fbc_status, sizeof(fbc_status));
-
-	return strstr(fbc_status, "FBC disabled: surface size too big\n");
-}
-
-static bool fbc_psr_not_possible(void)
-{
-	char fbc_status[128];
-
-	intel_fbc_get_status(prim_mode_params.crtc, fbc_status, sizeof(fbc_status));
-
-	return strstr(fbc_status, "FBC disabled: PSR1 enabled (Wa_14016291713)");
-}
-
 static bool fbc_enable_per_plane(int plane_index, igt_crtc_t *crtc)
 {
 	char fbc_status[PATH_MAX];
@@ -2488,6 +2443,8 @@ static void hdr_print_status(igt_output_t *output)
 
 static void do_status_assertions(int flags)
 {
+	igt_crtc_t *crtc = prim_mode_params.crtc;
+
 	if (!opt.check_status) {
 		/* Make sure we settle before continuing. */
 		sleep(1);
@@ -2505,27 +2462,25 @@ static void do_status_assertions(int flags)
 			igt_assert_f(false, "DRRS LOW\n");
 		}
 	} else if (flags & ASSERT_DRRS_INACTIVE) {
-		if (!intel_is_drrs_inactive(prim_mode_params.crtc)) {
+		if (!intel_is_drrs_inactive(crtc)) {
 			drrs_print_status();
 			igt_assert_f(false, "DRRS INACTIVE\n");
 		}
 	}
 
 	if (flags & ASSERT_FBC_ENABLED) {
-		igt_require(!fbc_not_enough_stolen());
-		igt_require(!fbc_stride_not_supported());
-		igt_require(!fbc_plane_size_too_big());
-		igt_require(!fbc_surface_size_too_big());
-		igt_require(!fbc_psr_not_possible());
-		if (!intel_fbc_wait_until_enabled(prim_mode_params.crtc)) {
-			igt_assert_f(intel_fbc_is_enabled(prim_mode_params.crtc, IGT_LOG_WARN),
+		igt_require(!intel_fbc_found_skip_reason(crtc->display->drm_fd,
+							 crtc->crtc_index));
+
+		if (!intel_fbc_wait_until_enabled(crtc)) {
+			igt_assert_f(intel_fbc_is_enabled(crtc, IGT_LOG_WARN),
 				     "FBC disabled\n");
 		}
 
 		if (opt.fbc_check_compression)
 			igt_assert(fbc_wait_for_compression());
 	} else if (flags & ASSERT_FBC_DISABLED) {
-		igt_assert(!intel_fbc_wait_until_enabled(prim_mode_params.crtc));
+		igt_assert(!intel_fbc_wait_until_enabled(crtc));
 	}
 
 	if (flags & ASSERT_PSR_ENABLED) {

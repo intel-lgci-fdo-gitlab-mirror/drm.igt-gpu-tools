@@ -20,5 +20,6 @@ bool intel_fbc_supported_for_psr_mode(igt_display_t *display, enum psr_mode mode
 void intel_fbc_get_status_crtc_index(int device, int crtc_index,
 				     char *fbc_status, int buf_size);
 void intel_fbc_get_status(igt_crtc_t *crtc, char *fbc_status, int buf_size);
+bool intel_fbc_found_skip_reason(int device, int crtc_index);
 
 #endif

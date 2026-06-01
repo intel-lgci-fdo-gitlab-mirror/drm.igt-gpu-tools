@@ -64,6 +64,43 @@ void intel_fbc_get_status(igt_crtc_t *crtc, char *fbc_status, int buf_size)
 }
 
 /**
+ * intel_fbc_found_skip_reason
+ * @device: fd of the device
+ * @crtc_index: crtc index
+ *
+ * Read the debugfs entry for current fbc status of a crtc and check for any reasons
+ * why FBC cannot be enabled. This helps in skipping FBC test cases where FBC cannot
+ * be enabled. These no fbc reasons are defined by the driver.
+ *
+ * Returns:
+ * True if there is a reason that FBC cannot be enabled otherwise false.
+ */
+bool intel_fbc_found_skip_reason(int device, int crtc_index)
+{
+	const char *const no_fbc_reasons[] = {
+		"FBC disabled: not enough stolen memory",
+		"FBC disabled: stride not supported",
+		"FBC disabled: plane size too big",
+		"FBC disabled: surface size too big",
+		"FBC disabled: PSR1 enabled (Wa_14016291713)"
+	};
+	bool found_reason = false;
+	char fbc_status[FBC_STATUS_BUF_LEN];
+	int i;
+
+	intel_fbc_get_status_crtc_index(device, crtc_index, fbc_status,
+					sizeof(fbc_status));
+
+	if (strstr(fbc_status, "FBC enabled\n"))
+		return false;
+
+	for (i = 0; !found_reason && i < ARRAY_SIZE(no_fbc_reasons); i++)
+		found_reason = strstr(fbc_status, no_fbc_reasons[i]);
+
+	return found_reason;
+}
+
+/**
  * intel_fbc_supported:
  * @crtc: CRTC
  *

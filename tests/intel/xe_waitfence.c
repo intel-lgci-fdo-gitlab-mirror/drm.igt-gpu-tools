@@ -139,6 +139,37 @@ waitfence(int fd, enum waittype wt)
 }
 
 /**
+ * SUBTEST: user-fence-no-signal
+ * Functionality: waitfence
+ * Description: Create a BO, map it, and call __xe_wait_ufence waiting for a
+ *              value that is never written. Expects -ETIME on timeout.
+ * Test category: negative test
+ */
+static void
+user_fence_no_signal(int fd)
+{
+	uint32_t vm, exec_queue, bo;
+	uint64_t *ptr;
+	int64_t timeout = NSEC_PER_SEC;
+	int ret;
+
+	vm = xe_vm_create(fd, 0, 0);
+	exec_queue = xe_exec_queue_create_class(fd, vm, DRM_XE_ENGINE_CLASS_COPY);
+
+	bo = xe_bo_create(fd, vm, SZ_4K, system_memory(fd), 0);
+	ptr = xe_bo_map(fd, bo, SZ_4K);
+	igt_assert(ptr != MAP_FAILED);
+
+	ret = __xe_wait_ufence(fd, ptr, 0xdeadbeef, exec_queue, &timeout);
+	igt_assert_eq(ret, -ETIME);
+
+	munmap(ptr, SZ_4K);
+	gem_close(fd, bo);
+	xe_exec_queue_destroy(fd, exec_queue);
+	xe_vm_destroy(fd, vm);
+}
+
+/**
  * SUBTEST: invalid-flag
  * Functionality: waitfence
  * Description: Check query with invalid flag returns expected error code
@@ -290,6 +321,9 @@ int igt_main()
 
 	igt_subtest("engine")
 		waitfence(fd, ENGINE);
+
+	igt_subtest("user-fence-no-signal")
+		user_fence_no_signal(fd);
 
 	igt_subtest("invalid-flag")
 		invalid_flag(fd);

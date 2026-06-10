@@ -98,6 +98,9 @@
  *
  * SUBTEST: dc5-dpms-suspend-resume
  * Description: This test validates DC5 state entry before and after a suspend/resume cycle using DPMS
+ *
+ * SUBTEST: dc5-psr-suspend-resume
+ * Description: This test validates DC5 state entry while PSR is active before and after a suspend/resume cycle
  */
 
 #define PWR_DOMAIN_INFO "i915_power_domain_info"
@@ -922,6 +925,18 @@ static void test_dc5_dpms_suspend_resume(data_t *data, int dc_flag)
 	test_dc_state_dpms(data, dc_flag);
 }
 
+static void test_dc5_psr_suspend_resume(data_t *data, int dc_flag)
+{
+	igt_info("Testing DC5 state before suspend\n");
+	test_dc_state_psr(data, dc_flag);
+
+	igt_info("Starting suspend/resume cycle\n");
+	igt_system_suspend_autoresume(SUSPEND_STATE_MEM, SUSPEND_TEST_NONE);
+
+	igt_info("Testing DC5 state after resume\n");
+	test_dc_state_psr(data, dc_flag);
+}
+
 static void kms_poll_state_restore(int sig)
 {
 	int sysfs_fd;
@@ -1144,6 +1159,17 @@ int igt_main()
 		      "suspend/resume cycle using DPMS");
 	igt_subtest("dc5-dpms-suspend-resume")
 		test_dc5_dpms_suspend_resume(&data, IGT_INTEL_CHECK_DC5);
+
+	igt_describe("This test validates DC5 state entry while PSR is active "
+		     "before and after a suspend/resume cycle");
+	igt_subtest("dc5-psr-suspend-resume") {
+		igt_require(psr_sink_support(data.drm_fd, data.debugfs_fd,
+					     PSR_MODE_1, NULL));
+		data.op_psr_mode = PSR_MODE_1;
+		psr_enable(data.drm_fd, data.debugfs_fd, data.op_psr_mode, NULL);
+		test_dc5_psr_suspend_resume(&data, IGT_INTEL_CHECK_DC5);
+		psr_disable(data.drm_fd, data.debugfs_fd, NULL);
+	}
 
 	igt_fixture() {
 		free(data.debugfs_dump);

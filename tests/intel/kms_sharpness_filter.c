@@ -464,7 +464,14 @@ static void test_sharpness_filter(data_t *data, enum test_type type)
 	 * is enabled and committed, the resulting CRC must differ.
 	 */
 	if (!is_invalid_test(type)) {
-		igt_display_commit2(&data->display, COMMIT_ATOMIC);
+		if (type == TEST_FILTER_DOWNSCALE) {
+			ret = igt_display_try_commit2(&data->display, COMMIT_ATOMIC);
+			igt_skip_on_f(ret == -ERANGE || ret == -EINVAL,
+				      "Scaling op not supported, cdclk limits might be exceeded.\n");
+			igt_assert_eq(ret, 0);
+		} else {
+			igt_display_commit2(&data->display, COMMIT_ATOMIC);
+		}
 		pipe_crc = igt_crtc_crc_new(data->crtc,
 					    IGT_PIPE_CRC_SOURCE_AUTO);
 		igt_pipe_crc_collect_crc(pipe_crc, &no_sharp_crc);

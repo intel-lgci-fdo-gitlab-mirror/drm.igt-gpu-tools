@@ -833,10 +833,13 @@ int igt_amd_trigger_hotplug(int drm_fd, char *connector_name)
 void igt_amd_read_link_settings(
 	int drm_fd, const char *connector_name, int *lane_count, int *link_rate, int *link_spread)
 {
+	static const char * const labels[] = {
+		"Current:", "Verified:", "Reported:", "Preferred:"
+	};
 	int fd, ret;
 	char buf[101];
-	int i = 0;
-	char *token_end, *val_token;
+	char *ptr;
+	int i;
 
 	fd = igt_debugfs_connector_dir(drm_fd, connector_name, O_RDONLY);
 	if (fd < 0) {
@@ -850,23 +853,22 @@ void igt_amd_read_link_settings(
 
 	close(fd);
 
-	/* Between current, verified, reported, and preferred are null terminators,
-	 * replace them with ';' to use as the delimiter for strtok. */
-	while (strlen(buf) < sizeof(buf) - 1 && buf[strlen(buf)] == '\0')
-		buf[strlen(buf)] = ';';
+	/* The debugfs node returns a single NUL-terminated string of the form:
+	 *   "Current:  %d  0x%x  %d  Verified:  %d  0x%x  %d  "
+	 *   "Reported:  %d  0x%x  %d  Preferred:  %d  0x%x  %d\n"
+	 * Locate each label and parse the three values that follow it. Do not
+	 * rely on embedded NUL bytes (or any other delimiter) between records,
+	 * as the kernel emits a single contiguous string. */
+	ptr = buf;
+	for (i = 0; i < 4; i++) {
+		ptr = strstr(ptr, labels[i]);
+		if (ptr == NULL)
+			break;
 
-	/* Parse values read from file. */
-	for (char *token = strtok_r(buf, ";", &token_end);
-	     token != NULL;
-	     token = strtok_r(NULL, ";", &token_end))
-	{
-		strtok_r(token, ": ", &val_token);
-		lane_count[i] = strtol(val_token, &val_token, 10);
-		link_rate[i] = strtol(val_token, &val_token, 16);
-		link_spread[i] = strtol(val_token, &val_token, 10);
-		i++;
-
-		if (i > 3) return;
+		ptr += strlen(labels[i]);
+		lane_count[i] = strtol(ptr, &ptr, 10);
+		link_rate[i] = strtol(ptr, &ptr, 16);
+		link_spread[i] = strtol(ptr, &ptr, 10);
 	}
 }
 

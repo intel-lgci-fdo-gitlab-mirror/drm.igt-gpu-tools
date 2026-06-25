@@ -25,7 +25,7 @@
 #include "igt_kmod.h"
 /**
  * TEST: dmabuf
- * Description: Kernel selftests for the dmabuf API
+ * Description: KUnit tests for the dmabuf API
  * Category: Core
  * Mega feature: General Core features
  * Functionality: drm_mm
@@ -33,14 +33,16 @@
  * Feature: mapping, prime
  * Test category: GEM_Legacy
  *
- * SUBTEST: all-tests
+ * SUBTEST: dma-buf-resv
  *
- * SUBTEST: all-tests@dma_fence
+ * SUBTEST: dma-buf-fence
  *
- * SUBTEST: all-tests@sanitycheck
+ * SUBTEST: dma-buf-fence-unwrap
+ *
+ * SUBTEST: dma-buf-fence-chain
  */
 
-IGT_TEST_DESCRIPTION("Kernel selftests for the dmabuf API");
+IGT_TEST_DESCRIPTION("KUnit tests for the dmabuf API");
 
 static unsigned int bogomips(void)
 {
@@ -76,23 +78,24 @@ static unsigned int bogomips(void)
 	return igt_debug_on(!bogomips) ? UINT_MAX : ret;
 }
 
-static int wrapper(const char *dynamic_name,
-		   struct igt_ktest *tst,
-		   struct igt_kselftest_list *tl)
-{
-	/*
-	 * Test case wait-backward of dma_fence_chain selftest can trigger soft
-	 * lockups on slow machines.  Since that slowness is not recognized as
-	 * a bug on the kernel side, the issue is not going to be fixed.  Based
-	 * on analysis of CI results, skip that selftest on machines slower than
-	 * 25000 BogoMIPS to avoid ever returning CI reports on that failure.
-	 */
-	igt_skip_on(!strcmp(dynamic_name, "dma_fence_chain") && bogomips() < 25000);
-
-	return igt_kselftest_execute(tst, tl, NULL, NULL);
-}
-
 int igt_main()
 {
-	igt_kselftests("dmabuf_selftests", NULL, NULL, NULL, wrapper);
+	igt_kunit("dmabuf_kunit", "dma-buf-resv", NULL);
+	igt_kunit("dmabuf_kunit", "dma-buf-fence", NULL);
+
+	/*
+	 * Test case wait-backward of dma_fence_chain test can trigger soft
+	 * lockups on slow machines.  Since that slowness is not recognized as
+	 * a bug on the kernel side, the issue is not going to be fixed.  Based
+	 * on analysis of CI results, skip that test on machines slower than
+	 * 25000 BogoMIPS to avoid ever returning CI reports on that failure.
+	 */
+
+	if (bogomips() >= 25000)
+		igt_kunit("dmabuf_kunit", "dma-buf-fence-chain", NULL);
+	else
+		igt_subtest("dma-buf-fence-chain")
+			igt_skip("BogoMips < 25000 - test is not supported\n");
+
+	igt_kunit("dmabuf_kunit", "dma-buf-fence-unwrap", NULL);
 }

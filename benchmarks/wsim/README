@@ -11,7 +11,7 @@ P|S|X.<uint>.<int>
 d|p|s|t|q|a|T.<int>,...
 b.<uint>.<str>[|<str>].<str>
 w|W.<uint>.<str>[/<str>]...
-V.<uint>
+V|c.<uint>
 v.<uint>.<uint>
 f
 
@@ -45,6 +45,7 @@ VM (Virtual Memory) management steps (Xe: active; i915: ignored):
 
  'V' - Create VM with id N (V.N, VM ids are 1-based).
  'v' - Assign VM N to context/queue M (v.N.M).
+ 'c' - Enable compute/LR mode for VM N (c.N).
 
 Engine ids: DEFAULT, RCS, BCS, VCS, VCS1, VCS2, VECS
 
@@ -95,7 +96,7 @@ Batch durations can also be specified as infinite by using the '*' in the
 duration field. Such batches must be ended by the terminate command ('T')
 otherwise they will cause a GPU hang to be reported.
 
-VM Example:
+VM Examples:
 
   V.1
   M.1.VCS
@@ -106,6 +107,18 @@ VM Example:
 Creates VM 1, configures context 1 with a VCS engine map, assigns context 1
 to VM 1, enables load balancing for context 1, and runs a single 1ms VCS
 batch.
+
+  V.1
+  c.1
+  v.1.1
+  v.1.2
+  1.BCS.5000.0.0
+  2.CCS.7000000.-1.0
+  1.BCS.5000.-1.1
+
+Creates VM 1, enables compute/LR mode on it, assigns contexts 1 and 2 to the
+same VM, then runs BCS and CCS work with cross-step dependencies (CCS depends
+on the first BCS step, and the final BCS step depends on the CCS step).
 
 Xe and i915 differences
 ------------------------

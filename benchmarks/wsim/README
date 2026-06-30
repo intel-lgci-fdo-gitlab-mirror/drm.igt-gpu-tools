@@ -11,6 +11,8 @@ P|S|X.<uint>.<int>
 d|p|s|t|q|a|T.<int>,...
 b.<uint>.<str>[|<str>].<str>
 w|W.<uint>.<str>[/<str>]...
+V.<uint>
+v.<uint>.<uint>
 f
 
 For duration a range can be given from which a random value will be picked
@@ -38,6 +40,11 @@ Additional workload steps are also supported:
  'w' - Working set. (See Working sets section.)
  'W' - Shared working set.
  'X' - Context preemption control.
+
+VM (Virtual Memory) management steps (Xe: active; i915: ignored):
+
+ 'V' - Create VM with id N (V.N, VM ids are 1-based).
+ 'v' - Assign VM N to context/queue M (v.N.M).
 
 Engine ids: DEFAULT, RCS, BCS, VCS, VCS1, VCS2, VECS
 
@@ -87,6 +94,18 @@ I this case the last step has a data dependency on both first and second steps.
 Batch durations can also be specified as infinite by using the '*' in the
 duration field. Such batches must be ended by the terminate command ('T')
 otherwise they will cause a GPU hang to be reported.
+
+VM Example:
+
+  V.1
+  M.1.VCS
+  v.1.1
+  B.1
+  1.VCS.1000.0.0
+
+Creates VM 1, configures context 1 with a VCS engine map, assigns context 1
+to VM 1, enables load balancing for context 1, and runs a single 1ms VCS
+batch.
 
 Xe and i915 differences
 ------------------------

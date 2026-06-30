@@ -130,6 +130,8 @@ enum w_type {
 	TERMINATE,
 	SSEU,
 	WORKINGSET,
+	VM_CREATE,
+	CTX_VM,
 };
 
 struct dep_entry {
@@ -210,6 +212,7 @@ struct w_step {
 		struct bond bond;
 		int sseu;
 		struct working_set working_set;
+		int vm_id;
 	};
 
 	/* Implementation details */
@@ -241,6 +244,7 @@ struct w_step {
 
 struct vm {
 	uint32_t id;
+	bool declared;
 	bool compute_mode;
 	uint64_t ahnd;
 };
@@ -1240,6 +1244,55 @@ parse_workload(struct w_arg *arg, unsigned int flags, double scale_dur,
 
 				step.type = WORKINGSET;
 				goto add_step;
+			} else if (!strcmp(field, "V")) {
+				/*
+				 * V.N  - create VM with id N (xe only, ignored on i915)
+				 * VM ids are 1-based in the descriptor.
+				 */
+				field = strtok_r(fstart, ".", &fctx);
+				check_arg(!field, "Missing VM id at step %u!\n",
+					  nr_steps);
+				tmp = atoi(field);
+				check_arg(tmp <= 0, "Invalid VM id at step %u!\n",
+					  nr_steps);
+				step.vm_id = tmp;
+				step.type = VM_CREATE;
+				goto add_step;
+			} else if (!strcmp(field, "v")) {
+				/*
+				 * v.N.M  - assign VM N to ctx M
+				 * (xe only, ignored on i915)
+				 */
+				unsigned int nr = 0;
+				int vm = 0, ctx_id = 0;
+
+				while ((field = strtok_r(fstart, ".", &fctx))) {
+					fstart = NULL;
+					tmp = atoi(field);
+					if (nr == 0) {
+						check_arg(tmp <= 0,
+							  "Invalid VM id at step %u!\n",
+							  nr_steps);
+						vm = tmp;
+					} else if (nr == 1) {
+						check_arg(tmp <= 0,
+							  "Invalid ctx id at step %u!\n",
+							  nr_steps);
+						ctx_id = tmp;
+					} else {
+						check_arg(1,
+							  "Too many fields in v step at step %u!\n",
+							  nr_steps);
+					}
+					nr++;
+				}
+				check_arg(nr != 2,
+					  "v step requires VM id and ctx id at step %u!\n",
+					  nr_steps);
+				step.vm_id = vm;
+				step.context = ctx_id;
+				step.type = CTX_VM;
+				goto add_step;
 			}
 
 			if (!field) {
@@ -1665,6 +1718,14 @@ xe_get_eq(struct workload *wrk, const struct w_step *w)
 static struct vm *
 get_vm(struct workload *wrk, const struct w_step *w)
 {
+	struct ctx *ctx = __get_ctx(wrk, w);
+
+	/* If the ctx has been linked to an explicit VM, use it; otherwise
+	 * fall back to the implicit single vm_list[0].
+	 */
+	if (ctx->vm)
+		return ctx->vm;
+
 	return wrk->vm_list;
 }
 
@@ -2087,6 +2148,33 @@ static void xe_exec_queue_create_(struct ctx *ctx, struct xe_exec_queue *eq)
 	eq->id = create.exec_queue_id;
 }
 
+static void allocate_vms(struct workload *wrk)
+{
+	int max_vm = 0;
+	struct w_step *w;
+
+	/*
+	 * Slot 0 is always the implicit/default VM. Descriptor VM ids are
+	 * 1-based and map directly to vm_list[N] for explicit V.N steps.
+	 */
+	for_each_w_step(w, wrk) {
+		if (w->type != VM_CREATE)
+			continue;
+		if (w->vm_id > max_vm)
+			max_vm = w->vm_id;
+	}
+
+	wrk->nr_vms = max_vm + 1;
+	wrk->vm_list = calloc(wrk->nr_vms, sizeof(*wrk->vm_list));
+	igt_assert(wrk->vm_list);
+
+	for_each_w_step(w, wrk) {
+		if (w->type == VM_CREATE)
+			/* Mark only explicitly declared VMs; slot 0 stays implicit. */
+			wrk->vm_list[w->vm_id].declared = true;
+	}
+}
+
 static void allocate_contexts(unsigned int id, struct workload *wrk)
 {
 	int max_ctx = -1;
@@ -2094,12 +2182,18 @@ static void allocate_contexts(unsigned int id, struct workload *wrk)
 
 	/*
 	 * Pre-scan workload steps to allocate context list storage.
+	 * Skip VM management steps whose context field is unused.
 	 */
 	for_each_w_step(w, wrk) {
-		int ctx = w->context + 1;
+		int ctx;
 		int delta;
 
 		w->wrk = wrk;
+
+		if (w->type == VM_CREATE)
+			continue;
+
+		ctx = w->context + 1;
 
 		if (ctx <= max_ctx)
 			continue;
@@ -2333,18 +2427,38 @@ static int xe_prepare_contexts(unsigned int id, struct workload *wrk)
 	struct ctx *ctx;
 	unsigned int i;
 
-	/* shortcut, create one vm */
-	wrk->nr_vms = 1;
-	wrk->vm_list = calloc(wrk->nr_vms, sizeof(struct vm));
-	igt_assert(wrk->vm_list);
-	wrk->vm_list->compute_mode = false;
-	xe_vm_create_(wrk->vm_list);
-	wrk->vm_list->ahnd = intel_allocator_open(fd, wrk->vm_list->id,
-						  INTEL_ALLOCATOR_RELOC);
+	/* Slot 0 is the implicit/default VM. */
+	xe_vm_create_(&wrk->vm_list[0]);
+	wrk->vm_list[0].ahnd = intel_allocator_open(fd, wrk->vm_list[0].id,
+						    INTEL_ALLOCATOR_RELOC);
+
+	for (i = 1; i < wrk->nr_vms; i++) {
+		if (!wrk->vm_list[i].declared)
+			continue;
+
+		xe_vm_create_(&wrk->vm_list[i]);
+		wrk->vm_list[i].ahnd =
+			intel_allocator_open(fd, wrk->vm_list[i].id,
+					     INTEL_ALLOCATOR_RELOC);
+	}
+
+	/*
+	 * Process CTX_VM steps to link each ctx to an explicit VM. Contexts
+	 * without a v.N.M mapping remain on the implicit VM in slot 0.
+	 */
+	__for_each_ctx(ctx, wrk, ctx_idx)
+		ctx->vm = &wrk->vm_list[0];
+
+	for_each_w_step(w, wrk) {
+		if (w->type != CTX_VM)
+			continue;
+		igt_assert_lt((unsigned int)w->vm_id, wrk->nr_vms);
+		igt_assert(wrk->vm_list[w->vm_id].declared);
+		igt_assert_lt((unsigned int)w->context, wrk->nr_ctxs);
+		wrk->ctx_list[w->context].vm = &wrk->vm_list[w->vm_id];
+	}
 
 	__for_each_ctx(ctx, wrk, ctx_idx) {
-		/* link with vm */
-		ctx->vm = wrk->vm_list;
 		for_each_w_step(w, wrk) {
 			if (w->context != ctx_idx)
 				continue;
@@ -2536,6 +2650,9 @@ static int prepare_workload(unsigned int id, struct workload *wrk)
 	wrk->run = true;
 
 	allocate_contexts(id, wrk);
+
+	if (is_xe)
+		allocate_vms(wrk);
 
 	if (is_xe)
 		ret = xe_prepare_contexts(id, wrk);
@@ -2857,7 +2974,9 @@ static void *run_workload(void *data)
 				   w->type == ENGINE_MAP ||
 				   w->type == LOAD_BALANCE ||
 				   w->type == BOND ||
-				   w->type == WORKINGSET) {
+				   w->type == WORKINGSET ||
+				   w->type == VM_CREATE ||
+				   w->type == CTX_VM) {
 				   /* No action for these at execution time. */
 				continue;
 			}

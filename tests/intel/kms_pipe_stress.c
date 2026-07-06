@@ -425,57 +425,83 @@ static int crtc_stress(struct data *data, igt_output_t *output,
 	if (!data->num_planes[crtc->pipe] || !new_mode)
 		return 0;
 
-	for_each_plane_on_crtc(crtc,
-			       plane) {
+	/* Set up overlay/primary planes up to the configured limit. */
+	for_each_plane_on_crtc(crtc, plane) {
 		int plane_width, plane_height;
+
+		if (plane->type == DRM_PLANE_TYPE_CURSOR)
+			continue;
+
+		plane_width = (mode->hdisplay * 3) / 4;
+		plane_height = (mode->vdisplay * 3) / 4;
+
+		/*
+		 * Set the source crop to match the initial destination
+		 * size (no upscaling).  Keeping source == destination
+		 * prevents the downscale ratio from exceeding the
+		 * hardware limit (~3×) when the destination is halved
+		 * in the reduction loop below.
+		 */
+		universal_plane_set_fb(plane,
+				       &data->fb[crtc->pipe * MAX_PLANES + i],
+				       plane_width, plane_height);
+
+		ret = try_plane_scaling(data, plane, plane_width, plane_height);
+
+		while (ret) {
+			if (plane_width <= cursor_width || plane_height <= cursor_height)
+				break;
+
+			plane_width /= 2;
+			plane_height /= 2;
+
+			/* Keep source crop in sync with the reduced destination. */
+			igt_fb_set_size(&data->fb[crtc->pipe * MAX_PLANES + i],
+					plane, plane_width, plane_height);
+
+			ret = try_plane_scaling(data, plane, plane_width, plane_height);
+
+			igt_info("Reduced plane %d size to %dx%d\n",
+				 plane->index, plane_width, plane_height);
+		}
+		if (ret) {
+			igt_info("Plane %d pipe %d try commit failed, exiting\n", i,
+				 crtc->pipe);
+			data->num_planes[crtc->pipe] = i;
+			igt_info("Max num planes for pipe %d set to %d\n",
+				 crtc->pipe, i);
+			/*
+			 * We have now determined max amount of full sized planes, we will just
+			 * keep it in mind and be smarter next time. Also lets remove unneeded fbs.
+			 * Don't destroy cursor_fb as will take care about it at the end.
+			 */
+			igt_plane_set_fb(plane, NULL);
+			cleanup_plane_fbs(data, crtc, i, MAX_PLANES);
+		}
+
+		if (++i >= data->num_planes[crtc->pipe])
+			break;
+	}
+
+	/*
+	 * Always attempt to enable the cursor plane.  First validate it with
+	 * a TEST_ONLY commit: some format/modifier combinations (e.g.
+	 * XRGB8888, 4-tiled) are not accepted by the cursor hardware.
+	 * If the test commit rejects the cursor, gracefully disable it so
+	 * the final actual commit with only overlay planes can succeed.
+	 */
+	for_each_plane_on_crtc(crtc, plane) {
 		if (plane->type == DRM_PLANE_TYPE_CURSOR) {
 			cursor_plane_set_fb(plane,
 					    &data->cursor_fb[crtc->pipe],
 					    cursor_width, cursor_height);
-			plane_width = cursor_width;
-			plane_height = cursor_height;
-		} else {
-			universal_plane_set_fb(plane,
-					       &data->fb[crtc->pipe * MAX_PLANES + i],
-					       mode->hdisplay, mode->vdisplay);
-
-			plane_width = (mode->hdisplay * 3) / 4;
-			plane_height = (mode->vdisplay * 3) / 4;
-
-			ret = try_plane_scaling(data, plane, plane_width, plane_height);
-
-			while (ret) {
-				if (plane_width <= cursor_width || plane_height <= cursor_height)
-					break;
-
-				plane_width /= 2;
-				plane_height /= 2;
-
-				ret = try_plane_scaling(data, plane, plane_width, plane_height);
-
-				igt_info("Reduced plane %d size to %dx%d\n",
-					 plane->index, plane_width, plane_height);
-			}
-			if (ret) {
-				igt_info("Plane %d pipe %d try commit failed, exiting\n", i,
-					 crtc->pipe);
-				data->num_planes[crtc->pipe] = i;
-				igt_info("Max num planes for pipe %d set to %d\n",
-					 crtc->pipe, i);
-				/*
-				 * We have now determined max amount of full sized planes, we will just
-				 * keep it in mind and be smarter next time. Also lets remove unneeded fbs.
-				 * Don't destroy cursor_fb as will take care about it at the end.
-				 */
+			if (igt_display_try_commit_atomic(&data->display,
+							  DRM_MODE_ATOMIC_TEST_ONLY |
+							  DRM_MODE_ATOMIC_ALLOW_MODESET, NULL)) {
 				igt_plane_set_fb(plane, NULL);
-				cleanup_plane_fbs(data,
-						  crtc,
-						  i,
-						  MAX_PLANES);
+				igt_info("Cursor fb not supported by hw (format/modifier), disabling\n");
 			}
-
-			if (++i >= data->num_planes[crtc->pipe])
-				break;
+			break;
 		}
 	}
 

@@ -736,8 +736,8 @@ static void create_framebuffers(struct data *data)
 		if (!data->cursor_fb[i].fb_id) {
 			igt_create_color_fb(data->drm_fd,
 					    cursor_width, cursor_height,
-					    data->format,
-					    data->modifier,
+					    DRM_FORMAT_ARGB8888,
+					    DRM_FORMAT_MOD_LINEAR,
 					    1.0, 0.0, 0.0,
 					    &data->cursor_fb[i]);
 		}

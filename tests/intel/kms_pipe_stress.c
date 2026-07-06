@@ -411,7 +411,7 @@ static int crtc_stress(struct data *data, igt_output_t *output,
 		ret = commit_mode(data, output,
 				  crtc, mode);
 
-		if (!ret)
+		if (ret)
 			return ret;
 
 		data->last_mode[crtc->pipe] = mode;

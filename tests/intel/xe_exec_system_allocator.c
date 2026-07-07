@@ -2740,10 +2740,16 @@ int igt_main()
 	igt_subtest("threads-shared-alloc-many-stride-malloc-race")
 		threads(fd, 1, 128, 0, 256, RACE | SHARED_ALLOC, false);
 
-	igt_subtest_f("fault")
+	igt_subtest_f("fault") {
+		/*
+		 * Ignore memory CAT error messages in dmesg (both 'Memory CAT error reported by GuC!'
+		 * and 'Engine memory CAT error'), as they are expected when testing page faults.
+		 */
+		igt_emit_ignore_dmesg_regex("[Mm]emory CAT error");
 		xe_for_each_engine(fd, hwe)
 			test_exec(fd, hwe, 4, 1, SZ_2M, 0, 0, NULL, NULL,
 				  FAULT, NULL);
+	}
 
 	for (const struct section *s = psections; s->name; s++) {
 		igt_subtest_f("partial-%s", s->name)

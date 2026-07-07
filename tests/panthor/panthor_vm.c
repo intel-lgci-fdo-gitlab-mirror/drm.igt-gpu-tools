@@ -4,6 +4,7 @@
 #include "igt.h"
 #include "igt_core.h"
 #include "igt_panthor.h"
+#include "igt_sizes.h"
 #include "panthor_drm.h"
 
 int igt_main() {
@@ -284,6 +285,326 @@ int igt_main() {
 		igt_panthor_vm_bind(fd, vm_id, bo.handle, ALIGN(uva_range, bo_size),
 				    bo_size, DRM_PANTHOR_VM_BIND_OP_TYPE_MAP, EINVAL);
 
+		igt_panthor_vm_destroy(fd, vm_id, 0);
+	}
+
+	igt_describe("Perform a simple sparse vm_bind operation");
+	igt_subtest("vm_bind_sparse") {
+		uint32_t vm_id;
+		uint64_t map_size = SZ_4K * 4;
+
+		igt_panthor_vm_create(fd, &vm_id, 0);
+		igt_assert(vm_id != 0);
+
+		igt_panthor_vm_bind_sparse(fd, vm_id, SZ_2M, map_size, 0);
+		igt_panthor_vm_destroy(fd, vm_id, 0);
+	}
+
+	igt_describe("Perform a partial hugepage-unaligned unmap of a sparsely bound region");
+	igt_subtest("vm_bind_sparse_partial_unmap_start_size_unaligned") {
+		uint32_t vm_id;
+		uint64_t map_size = SZ_2M * 3;
+		const int INITIAL_VA = SZ_4M;
+
+		igt_panthor_vm_create(fd, &vm_id, 0);
+		igt_assert(vm_id != 0);
+
+		igt_panthor_vm_bind_sparse(fd, vm_id, INITIAL_VA, map_size, 0);
+		igt_panthor_vm_bind(fd, vm_id, 0, INITIAL_VA, SZ_4K * 2,
+				    DRM_PANTHOR_VM_BIND_OP_TYPE_UNMAP, 0);
+		igt_panthor_vm_destroy(fd, vm_id, 0);
+	}
+
+	igt_describe("Do a partial hugeapge-aligned unmap from start of sparsely-bound region");
+	igt_subtest("vm_bind_sparse_partial_unmap_start_size_aligned") {
+		uint32_t vm_id;
+		uint64_t map_size = SZ_2M * 3;
+		const int INITIAL_VA = SZ_4M;
+
+		igt_panthor_vm_create(fd, &vm_id, 0);
+		igt_assert(vm_id != 0);
+
+		igt_panthor_vm_bind_sparse(fd, vm_id, INITIAL_VA, map_size, 0);
+		igt_panthor_vm_bind(fd, vm_id, 0, INITIAL_VA, SZ_2M,
+				    DRM_PANTHOR_VM_BIND_OP_TYPE_UNMAP, 0);
+		igt_panthor_vm_destroy(fd, vm_id, 0);
+	}
+
+	igt_describe("Do a partial hugeapge-unaligned unmap from start of sparsely-bound region");
+	igt_subtest("vm_bind_sparse_partial_unmap_start_aligned_no_hugepage_multiple") {
+		uint32_t vm_id;
+		uint64_t map_size = SZ_2M * 3;
+		const int INITIAL_VA = SZ_4M;
+
+		igt_panthor_vm_create(fd, &vm_id, 0);
+		igt_assert(vm_id != 0);
+
+		igt_panthor_vm_bind_sparse(fd, vm_id, INITIAL_VA, map_size, 0);
+		igt_panthor_vm_bind(fd, vm_id, 0, INITIAL_VA, 4 * SZ_64K,
+				    DRM_PANTHOR_VM_BIND_OP_TYPE_UNMAP, 0);
+		igt_panthor_vm_destroy(fd, vm_id, 0);
+	}
+
+	igt_describe("Do partial hugeapge-aligned unmap that left-intersects with sparse region");
+	igt_subtest("vm_bind_sparse_partial_unmap_below_start") {
+		uint32_t vm_id;
+		uint64_t map_size = SZ_2M * 3;
+		const int INITIAL_VA = SZ_4M;
+
+		igt_panthor_vm_create(fd, &vm_id, 0);
+		igt_assert(vm_id != 0);
+
+		igt_panthor_vm_bind_sparse(fd, vm_id, INITIAL_VA, map_size, 0);
+		igt_panthor_vm_bind(fd, vm_id, 0, INITIAL_VA - SZ_2M, SZ_2M * 3,
+				    DRM_PANTHOR_VM_BIND_OP_TYPE_UNMAP, 0);
+		igt_panthor_vm_destroy(fd, vm_id, 0);
+	}
+
+	igt_describe("Do partial hugepage-aligned unmap that is proper subset of sparse region");
+	igt_subtest("vm_bind_sparse_partial_unmap_above_start") {
+		uint32_t vm_id;
+		uint64_t map_size = SZ_2M * 3;
+		const int INITIAL_VA = SZ_4M;
+
+		igt_panthor_vm_create(fd, &vm_id, 0);
+		igt_assert(vm_id != 0);
+
+		igt_panthor_vm_bind_sparse(fd, vm_id, INITIAL_VA, map_size, 0);
+		igt_panthor_vm_bind(fd, vm_id, 0, INITIAL_VA + SZ_2M, SZ_2M,
+				    DRM_PANTHOR_VM_BIND_OP_TYPE_UNMAP, 0);
+		igt_panthor_vm_destroy(fd, vm_id, 0);
+	}
+
+	igt_describe("Do normal hugepage-aligned bind that intersects with sparsely-mapped region");
+	igt_subtest("vm_bind_sparse_remap") {
+		uint32_t vm_id;
+		struct panthor_bo bo;
+		uint64_t map_size = SZ_2M * 3;
+		const int INITIAL_VA = SZ_4M;
+
+		igt_panthor_vm_create(fd, &vm_id, 0);
+		igt_assert(vm_id != 0);
+
+		igt_panthor_vm_bind_sparse(fd, vm_id, INITIAL_VA, map_size, 0);
+
+		/* Now attempt normal VM_BIND's that intersect with the previous chunk */
+		igt_panthor_bo_create(fd, &bo, SZ_8M, 0, 0);
+		igt_panthor_vm_bind(fd, vm_id, bo.handle, INITIAL_VA + SZ_2M, SZ_2M * 2,
+				    DRM_PANTHOR_VM_BIND_OP_TYPE_MAP, 0);
+
+		igt_panthor_vm_destroy(fd, vm_id, 0);
+	}
+
+	igt_describe("Do normal hugepage-unaligned bind that intersects with sparsely-mapped region");
+	igt_subtest("vm_bind_sparse_remap_start_unaligned") {
+		uint32_t vm_id;
+		struct panthor_bo bo;
+		uint64_t map_size = SZ_2M * 3;
+		const int INITIAL_VA = SZ_4M;
+
+		igt_panthor_vm_create(fd, &vm_id, 0);
+		igt_assert(vm_id != 0);
+
+		igt_panthor_vm_bind_sparse(fd, vm_id, INITIAL_VA, map_size, 0);
+
+		/* Now attempt normal VM_BIND's that intersect with the previous chunk */
+		igt_panthor_bo_create(fd, &bo, SZ_8M, 0, 0);
+		igt_panthor_vm_bind(fd, vm_id, bo.handle, INITIAL_VA + map_size - SZ_1M,
+				    SZ_4M, DRM_PANTHOR_VM_BIND_OP_TYPE_MAP, 0);
+
+		igt_panthor_vm_destroy(fd, vm_id, 0);
+	}
+
+	igt_describe("Do normal hugepage-unaligned bind that intersects with sparsely-mapped region");
+	igt_subtest("vm_bind_sparse_remap_start_size_unaligned") {
+		uint32_t vm_id;
+		struct panthor_bo bo;
+		uint64_t map_size = SZ_2M * 3;
+		const int INITIAL_VA = SZ_4M;
+
+		igt_panthor_vm_create(fd, &vm_id, 0);
+		igt_assert(vm_id != 0);
+
+		igt_panthor_vm_bind_sparse(fd, vm_id, INITIAL_VA, map_size, 0);
+
+		/* Now attempt normal VM_BIND's that intersect with the previous chunk */
+		igt_panthor_bo_create(fd, &bo, SZ_8M, 0, 0);
+		igt_panthor_vm_bind(fd, vm_id, bo.handle, INITIAL_VA + map_size - SZ_1M,
+				    SZ_1M, DRM_PANTHOR_VM_BIND_OP_TYPE_MAP, 0);
+
+		igt_panthor_vm_destroy(fd, vm_id, 0);
+	}
+
+	igt_describe("Do normal hugepage-aligned bind that intersects with sparsely-mapped region");
+	igt_subtest("vm_bind_sparse_remap_start_size_aligned") {
+		uint32_t vm_id;
+		struct panthor_bo bo;
+		uint64_t map_size = SZ_2M * 3;
+		const int INITIAL_VA = SZ_4M;
+
+		igt_panthor_vm_create(fd, &vm_id, 0);
+		igt_assert(vm_id != 0);
+
+		igt_panthor_vm_bind_sparse(fd, vm_id, INITIAL_VA, map_size, 0);
+
+		/* Now attempt normal VM_BIND's that intersect with the previous chunk */
+		igt_panthor_bo_create(fd, &bo, SZ_8M, 0, 0);
+		igt_panthor_vm_bind(fd, vm_id, bo.handle,
+				    INITIAL_VA + map_size - SZ_2M, SZ_4M,
+				    DRM_PANTHOR_VM_BIND_OP_TYPE_MAP, 0);
+
+		igt_panthor_vm_destroy(fd, vm_id, 0);
+	}
+
+	igt_describe("Do normal hugepage-aligned bind that splits original region in two");
+	igt_subtest("vm_bind_sparse_remap_aligned_split_original_va") {
+		uint32_t vm_id;
+		struct panthor_bo bo;
+		uint64_t map_size = SZ_2M * 3;
+		const int INITIAL_VA = SZ_4M;
+
+		igt_panthor_vm_create(fd, &vm_id, 0);
+		igt_assert(vm_id != 0);
+
+		igt_panthor_vm_bind_sparse(fd, vm_id, INITIAL_VA, map_size, 0);
+
+		/* Now attempt normal VM_BIND's that intersect with the previous chunk */
+		igt_panthor_bo_create(fd, &bo, SZ_8M, 0, 0);
+		igt_panthor_vm_bind(fd, vm_id, bo.handle, INITIAL_VA + SZ_2M,
+				    SZ_2M, DRM_PANTHOR_VM_BIND_OP_TYPE_MAP, 0);
+
+		igt_panthor_vm_destroy(fd, vm_id, 0);
+	}
+
+	igt_describe("Do normal 2MiB aligned hugepage-size-unaligned bind over sparse region");
+	igt_subtest("vm_bind_sparse_remap_start_aligned_size_unaligned") {
+		uint32_t vm_id;
+		struct panthor_bo bo;
+		uint64_t map_size = SZ_2M * 3;
+		const int INITIAL_VA = SZ_4M;
+
+		igt_panthor_vm_create(fd, &vm_id, 0);
+		igt_assert(vm_id != 0);
+
+		igt_panthor_vm_bind_sparse(fd, vm_id, INITIAL_VA, map_size, 0);
+
+		/* Now attempt normal VM_BIND's that intersect with the previous chunk */
+		igt_panthor_bo_create(fd, &bo, SZ_8M, 0, 0);
+		igt_panthor_vm_bind(fd, vm_id, bo.handle, INITIAL_VA + SZ_2M,
+				    SZ_1M, DRM_PANTHOR_VM_BIND_OP_TYPE_MAP, 0);
+
+		igt_panthor_vm_destroy(fd, vm_id, 0);
+	}
+
+	igt_describe("Do normal hugepage-aligned bind over left end of sparse region");
+	igt_subtest("vm_bind_sparse_remap_aligned_intersect_left") {
+		uint32_t vm_id;
+		struct panthor_bo bo;
+		uint64_t map_size = SZ_2M * 3;
+		const int INITIAL_VA = SZ_4M;
+
+		igt_panthor_vm_create(fd, &vm_id, 0);
+		igt_assert(vm_id != 0);
+
+		igt_panthor_vm_bind_sparse(fd, vm_id, INITIAL_VA, map_size, 0);
+
+		/* Now attempt normal VM_BIND's that intersect with the previous chunk */
+		igt_panthor_bo_create(fd, &bo, SZ_8M, 0, 0);
+		igt_panthor_vm_bind(fd, vm_id, bo.handle,
+				    INITIAL_VA - SZ_2M, SZ_2M * 2,
+				    DRM_PANTHOR_VM_BIND_OP_TYPE_MAP, 0);
+
+		igt_panthor_vm_destroy(fd, vm_id, 0);
+	}
+
+	igt_describe("Do normal hugepage-unaligned bind over left end of sparse region");
+	igt_subtest("vm_bind_sparse_remap_size_unaligned_intersect_left") {
+		uint32_t vm_id;
+		struct panthor_bo bo;
+		uint64_t map_size = SZ_2M * 3;
+		const int INITIAL_VA = SZ_4M;
+
+		igt_panthor_vm_create(fd, &vm_id, 0);
+		igt_assert(vm_id != 0);
+
+		igt_panthor_vm_bind_sparse(fd, vm_id, INITIAL_VA, map_size, 0);
+
+		/* Now attempt normal VM_BIND's that intersect with the previous chunk */
+		igt_panthor_bo_create(fd, &bo, SZ_8M, 0, 0);
+		igt_panthor_vm_bind(fd, vm_id, bo.handle,
+				    INITIAL_VA - SZ_2M, SZ_1M * 3,
+				    DRM_PANTHOR_VM_BIND_OP_TYPE_MAP, 0);
+
+		igt_panthor_vm_destroy(fd, vm_id, 0);
+	}
+
+	igt_describe("Do normal hugepage-unaligned bind over right end of sparse region");
+	igt_subtest("vm_bind_sparse_remap_start_aligned_intersect_right") {
+		uint32_t vm_id;
+		struct panthor_bo bo;
+		uint64_t map_size = SZ_2M * 3;
+		const int INITIAL_VA = SZ_4M;
+
+		igt_panthor_vm_create(fd, &vm_id, 0);
+		igt_assert(vm_id != 0);
+
+		igt_panthor_vm_bind_sparse(fd, vm_id, INITIAL_VA, map_size, 0);
+
+		/* Now attempt normal VM_BIND's that intersect with the previous chunk */
+		igt_panthor_bo_create(fd, &bo, SZ_8M, 0, 0);
+		igt_panthor_vm_bind(fd, vm_id, bo.handle,
+				    INITIAL_VA + map_size - SZ_2M, SZ_2M + SZ_4K * 6,
+				    DRM_PANTHOR_VM_BIND_OP_TYPE_MAP, 0);
+
+		igt_panthor_vm_destroy(fd, vm_id, 0);
+	}
+
+	igt_describe("Do normal hugepage-aligned bind that envelopes whole sparse region");
+	igt_subtest("vm_bind_sparse_remap_wrap_around_va") {
+		uint32_t vm_id;
+		struct panthor_bo bo;
+		uint64_t map_size = SZ_2M * 3;
+		const int INITIAL_VA = SZ_4M;
+
+		igt_panthor_vm_create(fd, &vm_id, 0);
+		igt_assert(vm_id != 0);
+
+		igt_panthor_vm_bind_sparse(fd, vm_id, INITIAL_VA, map_size, 0);
+
+		/* Now attempt normal VM_BIND's that intersect with the previous chunk */
+		igt_panthor_bo_create(fd, &bo, SZ_8M, 0, 0);
+		igt_panthor_vm_bind(fd, vm_id, bo.handle, INITIAL_VA - SZ_2M,
+				    SZ_8M, DRM_PANTHOR_VM_BIND_OP_TYPE_MAP, 0);
+
+		igt_panthor_vm_destroy(fd, vm_id, 0);
+	}
+
+	igt_describe("Perform sparse binding operation whose range causes an overflow");
+	igt_subtest("vm_bind_sparse_overflow") {
+		uint32_t vm_id;
+		uint64_t map_size = ALIGN_DOWN(UINT64_MAX, SZ_2M) - (SZ_2M * 3);
+		const int INITIAL_VA = SZ_512M;
+
+		igt_panthor_vm_create(fd, &vm_id, 0);
+		igt_assert(vm_id != 0);
+
+		igt_panthor_vm_bind_sparse(fd, vm_id, INITIAL_VA, map_size, EINVAL);
+		igt_panthor_vm_destroy(fd, vm_id, 0);
+	}
+
+	igt_describe("Perform sparse unbind operation whose range causes an overflow");
+	igt_subtest("vm_unbind_sparse_overflow") {
+		uint32_t vm_id;
+		uint64_t map_size = SZ_2M * 3;
+		uint64_t unmap_size = ALIGN_DOWN(UINT64_MAX, SZ_2M) - map_size;
+		const int INITIAL_VA = SZ_512M;
+
+		igt_panthor_vm_create(fd, &vm_id, 0);
+		igt_assert(vm_id != 0);
+
+		igt_panthor_vm_bind_sparse(fd, vm_id, INITIAL_VA, map_size, 0);
+		igt_panthor_vm_bind(fd, vm_id, 0, INITIAL_VA, unmap_size,
+				    DRM_PANTHOR_VM_BIND_OP_TYPE_UNMAP, EINVAL);
 		igt_panthor_vm_destroy(fd, vm_id, 0);
 	}
 

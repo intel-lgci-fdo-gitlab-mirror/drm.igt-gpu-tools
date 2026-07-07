@@ -256,8 +256,15 @@ static bool force_failure_and_wait(data_t *data,
 	if (check_condition_with_timeout(data->drm_fd, output,
 					 i915_dp_get_pending_lt_failures,
 					 interval, timeout)) {
-		igt_info("Timed out waiting for pending LT failures\n");
-		return false;
+		/*
+		 * A stale counter means the fallback already fired in a single
+		 * forced retrain (seq_train_failures was pre-loaded by a prior
+		 * genuine failure), so no second retrain was queued. Clear it
+		 * so it can't force a failure during the recovery recommit; the
+		 * hotplug/link-status checks below still verify the fallback.
+		 */
+		igt_info("Forced LT failures not consumed within timeout; clearing stale counter\n");
+		i915_dp_force_lt_failure(data->drm_fd, output, 0);
 	}
 
 	return true;

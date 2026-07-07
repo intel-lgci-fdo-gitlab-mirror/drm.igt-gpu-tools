@@ -49,6 +49,16 @@ static inline void igt_panthor_vm_create(int fd, uint32_t *vm_id, int err)
 	igt_panthor_vm_create_userva_range(fd, vm_id, err, 0);
 }
 
+static inline void igt_panthor_vm_bind_sparse(int fd, uint32_t vm_id,
+					      uint64_t va, uint64_t size, int err)
+{
+	uint32_t flags = DRM_PANTHOR_VM_BIND_OP_TYPE_MAP |
+			 DRM_PANTHOR_VM_BIND_OP_MAP_SPARSE |
+			 DRM_PANTHOR_VM_BIND_OP_MAP_NOEXEC;
+
+	igt_panthor_vm_bind_offset(fd, vm_id, 0, va, size, 0, flags, err);
+}
+
 enum cs_opcode {
 	CS_OPCODE_NOP = 0,
 	CS_OPCODE_MOVE48 = 1,

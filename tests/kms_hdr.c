@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include "igt_edid.h"
 #include "igt_hdr.h"
+#include "igt_sysfs.h"
 
 /**
  * SUBTEST: bpc-switch
@@ -713,8 +714,12 @@ int igt_main()
 		test_hdr(&data, TEST_INVALID_METADATA_SIZES);
 
 	igt_describe("Test to ensure HDR is not enabled on non-HDR panel");
-	igt_subtest_with_dynamic("invalid-hdr")
+	igt_subtest_with_dynamic("invalid-hdr") {
+		igt_install_exit_handler(igt_drm_debug_mask_reset_exit_handler);
+		igt_drm_debug_mask_update(DRM_UT_KMS);
 		test_hdr(&data, TEST_INVALID_HDR);
+		igt_drm_debug_mask_reset();
+	}
 
 	igt_fixture() {
 		igt_display_fini(&data.display);

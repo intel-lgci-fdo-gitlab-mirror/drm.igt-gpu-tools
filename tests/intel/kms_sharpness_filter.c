@@ -358,9 +358,11 @@ static void cleanup(data_t *data)
 	cleanup_fbs(data);
 }
 
-static void get_modes_for_filter_taps(igt_output_t *output, drmModeModeInfo *mode[3])
+static void get_modes_for_filter_taps(int drm_fd, igt_output_t *output,
+				      drmModeModeInfo *mode[3])
 {
 	drmModeConnector *connector = output->config.connector;
+	int max_dotclock = igt_get_max_dotclock(drm_fd);
 	int total_pixels = 0;
 
 	/*
@@ -368,8 +370,14 @@ static void get_modes_for_filter_taps(igt_output_t *output, drmModeModeInfo *mod
 	 * TAP 5: (mode->hdisplay > 1920 && mode->hdisplay < 3840) &&
 	 * 	  (mode->vdisplay > 1080 && mode->vdisplay < 2160)
 	 * TAP 7: mode->hdisplay >= 3840 && mode->vdisplay >= 2160
+	 *
+	 * Skip modes requiring joiner since joiner + CASF is unsupported.
 	 */
 	for (int i = 0; i < connector->count_modes; i++) {
+		if (igt_bigjoiner_possible(drm_fd, &connector->modes[i],
+					   max_dotclock))
+			continue;
+
 		total_pixels = connector->modes[i].hdisplay * connector->modes[i].vdisplay;
 
 		if (total_pixels <= MAX_PIXELS_FOR_3_TAP_FILTER)
@@ -670,11 +678,15 @@ run_sharpness_filter_test(data_t *data, enum test_type type)
 			if (type == TEST_FILTER_TAP) {
 				drmModeModeInfo *modes[3] = { NULL, NULL, NULL };
 
-				get_modes_for_filter_taps(output, modes);
+				get_modes_for_filter_taps(data->drm_fd, output, modes);
 				for (int i = 0; i < 3; i++) {
 					data->filter_tap = filter_tap_list[i];
-					if (!modes[i])
+					if (!modes[i]) {
+						igt_info("No valid non-joiner mode for tap-%d on %s\n",
+							 data->filter_tap,
+							 igt_output_name(data->output));
 						continue;
+					}
 					data->mode = modes[i];
 					igt_info("Mode %dx%d@%d on output %s\n",
 						 data->mode->hdisplay,

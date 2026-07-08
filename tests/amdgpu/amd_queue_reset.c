@@ -840,7 +840,15 @@ run_background(amdgpu_device_handle device, struct shmbuf *sh_mem,
 				//if entire gpu reset then stop back ground jobs
 				break;
 			}
-			if (r != -ECANCELED && r != -ETIME && r != -ENODATA)
+			/*
+			 * A "good" background job can be collateral-cancelled by
+			 * the concurrent queue reset triggered by the bad job.
+			 * Tolerate every reset-induced error so the helper never
+			 * aborts this process - its death would break the
+			 * NUM_CHILD_PROCESSES barrier and hang the whole test.
+			 */
+			if (r != -ECANCELED && r != -ETIME && r != -ENODATA &&
+			    r != -EHWPOISON)
 				igt_assert_eq(r, 0);
 			//igt_assert_eq(err_codes.err_code_wait_for_fence, job.reset_err_result);
 			counter++;

@@ -119,8 +119,11 @@ int amdgpu_test_exec_cs_helper(amdgpu_device_handle device, unsigned int ip_type
 		if (expect_failure)
 			igt_info("amdgpu_cs_submit %d PID %d\n", r, getpid());
 		else {
-			/* we allow ECANCELED, ENODATA or -EHWPOISON for good jobs temporally */
-			if (r != -ECANCELED && r != -ENODATA && r != -EHWPOISON)
+			/* a good job may be collateral-cancelled by a concurrent
+			 * queue reset; tolerate every reset-induced error
+			 */
+			if (r != -ECANCELED && r != -ENODATA && r != -EHWPOISON &&
+			    r != -ETIME)
 				igt_assert_eq(r, 0);
 		}
 
@@ -142,8 +145,11 @@ int amdgpu_test_exec_cs_helper(amdgpu_device_handle device, unsigned int ip_type
 			igt_info("EXPECT FAILURE amdgpu_cs_query_fence_status %d\n"
 				 "expired %d PID %d\n", r, expired, getpid());
 		} else {
-			/* we allow ECANCELED or ENODATA for good jobs temporally */
-			if (r != -ECANCELED && r != -ENODATA && r != -ETIME)
+			/* a good job may be collateral-cancelled by a concurrent
+			 * queue reset; tolerate every reset-induced error
+			 */
+			if (r != -ECANCELED && r != -ENODATA && r != -ETIME &&
+			    r != -EHWPOISON)
 				igt_assert_eq(r, 0);
 		}
 	}

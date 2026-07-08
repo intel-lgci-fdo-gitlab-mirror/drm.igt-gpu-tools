@@ -695,6 +695,9 @@ run_sharpness_filter_test(data_t *data, enum test_type type)
 						 igt_output_name(data->output));
 					igt_output_override_mode(data->output,
 								 data->mode);
+					if (!data->output->pending_crtc)
+						igt_output_set_crtc(data->output,
+								    data->crtc);
 
 					snprintf(name, sizeof(name), "-tap-%d",
 						 data->filter_tap);

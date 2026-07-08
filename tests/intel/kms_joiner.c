@@ -382,10 +382,17 @@ static void test_invalid_modeset_two_joiner(data_t *data,
 		for (j = 0; j < INVALID_TEST_OUTPUT; j++) {
 			igt_crtc_t *crtc;
 			enum pipe pipe = data->pipe_seq[i + j];
+			/*
+			 * In the mixed case only the first output (j == 0) is a
+			 * big joiner output; the second is a non-big-joiner output.
+			 * In all other cases every output is a big joiner output.
+			 */
+			bool is_big_joiner_output = !mixed || j == 0;
+			bool needs_big_joiner_mode = !force_joiner && is_big_joiner_output;
 
 			output = outputs[j];
 
-			if (!force_joiner) {
+			if (needs_big_joiner_mode) {
 				igt_require_f(bigjoiner_mode_found(data->drm_fd, output->config.connector, max_dotclock, &mode),
 							  "No big joiner mode found on output %s\n", output->name);
 				igt_output_override_mode(output, &mode);

@@ -362,30 +362,60 @@ static void test_dc3co_vpb_simulation(data_t *data)
 	cleanup_dc3co_fbs(data);
 }
 
-static uint32_t wait_for_next_vblank_seq(data_t *data)
+struct dc3co_flip {
+	bool done;
+	unsigned int seq;
+};
+
+static void dc3co_flip_handler(int fd, unsigned int seq, unsigned int tv_sec,
+			       unsigned int tv_usec, void *user_data)
 {
-	drmVBlank wait = {};
-	igt_crtc_t *crtc = data->output->pending_crtc;
+	struct dc3co_flip *flip = user_data;
 
-	igt_assert_f(crtc, "No CRTC bound to output for vblank wait\n");
+	flip->seq = seq;
+	flip->done = true;
+}
 
-	wait.request.type = kmstest_get_vbl_flag(crtc->crtc_index) |
-						 DRM_VBLANK_RELATIVE |
-						 DRM_VBLANK_NEXTONMISS;
-	wait.request.sequence = 1;
-	igt_assert_eq(drmWaitVBlank(data->drm_fd, &wait), 0);
+static unsigned int dc3co_flip_and_wait(data_t *data, uint32_t crtc_id,
+					uint32_t fb_id, int frame_time_us)
+{
+	drmEventContext evctx = {
+		.version = 2,
+		.page_flip_handler = dc3co_flip_handler,
+	};
+	struct dc3co_flip flip = {};
+	struct pollfd pfd = {
+		.fd = data->drm_fd,
+		.events = POLLIN,
+	};
+	int timeout_ms = (DC3CO_MAX_VBLANK_GAP + 2) * frame_time_us / 1000;
 
-	return wait.reply.sequence;
+	if (timeout_ms < 50)
+		timeout_ms = 50;
+
+	igt_assert_eq(drmModePageFlip(data->drm_fd, crtc_id, fb_id,
+				      DRM_MODE_PAGE_FLIP_EVENT, &flip), 0);
+
+	while (!flip.done) {
+		igt_assert_f(poll(&pfd, 1, timeout_ms) > 0,
+			     "Frame dropped: no page flip completion within %d ms "
+			     "during DC3CO entry/exit\n", timeout_ms);
+		igt_assert_eq(drmHandleEvent(data->drm_fd, &evctx), 0);
+	}
+
+	return flip.seq;
 }
 
 static void detect_dc3co_framedrop(data_t *data)
 {
 	igt_plane_t *primary;
+	igt_crtc_t *crtc;
 	uint32_t dc3co_prev_cnt;
 	uint32_t dc3co_cur_cnt;
 	uint32_t prev_vblank_seq = 0;
 	uint32_t vblank_seq;
 	uint32_t vblank_gap;
+	int frame_time_us;
 	int delay;
 	int committed = 0;
 	bool dc3co_after_target = false;
@@ -393,25 +423,30 @@ static void detect_dc3co_framedrop(data_t *data)
 
 	igt_require_f(data->mode->vrefresh != 0, "Invalid vrefresh rate of 0\n");
 
+	crtc = data->output->pending_crtc;
+	igt_assert_f(crtc, "No CRTC bound to output\n");
+
 	primary = igt_output_get_plane_type(data->output, DRM_PLANE_TYPE_PRIMARY);
-	igt_plane_set_fb(primary, NULL);
+
+	igt_plane_set_fb(primary, &data->fb_rgb);
 	igt_display_commit(&data->display);
 
 	dc3co_prev_cnt = igt_read_dc_counter(data->debugfs_fd, IGT_INTEL_CHECK_DC3CO);
 
-	delay = (int)(DC3CO_FRAME_DELAY_FACTOR * (1000000 / data->mode->vrefresh));
+	frame_time_us = 1000000 / data->mode->vrefresh;
+	delay = (int)(DC3CO_FRAME_DELAY_FACTOR * frame_time_us);
 
 	while (committed < DC3CO_VERIFY_COMMITS) {
 		front = !front;
-		igt_plane_set_fb(primary, front ? &data->fb_rgr : &data->fb_rgb);
-		igt_display_commit(&data->display);
-
-		vblank_seq = wait_for_next_vblank_seq(data);
+		vblank_seq = dc3co_flip_and_wait(data, crtc->crtc_id,
+						 front ? data->fb_rgr.fb_id :
+							 data->fb_rgb.fb_id,
+						 frame_time_us);
 		if (prev_vblank_seq) {
 			vblank_gap = vblank_seq - prev_vblank_seq;
 			igt_assert_f(igt_vblank_after(vblank_seq, prev_vblank_seq) &&
 				     vblank_gap <= DC3CO_MAX_VBLANK_GAP,
-				     "Unexpected vblank gap %u after commit %d (prev=%u, cur=%u)\n",
+				     "Frame drop: unexpected vblank gap %u after commit %d (prev=%u, cur=%u)\n",
 				     vblank_gap, committed + 1, prev_vblank_seq, vblank_seq);
 		}
 		prev_vblank_seq = vblank_seq;

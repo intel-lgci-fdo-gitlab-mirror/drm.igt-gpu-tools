@@ -2799,7 +2799,7 @@ static void test_oom(int fd)
 				oom = true;
 				break;
 			}
-			igt_assert_f(err, "Unexpected error %d for vm bind\n",
+			igt_assert_f(!err, "Unexpected error %d for vm bind\n",
 				     err);
 		} else {
 			bind_vm = bind_vm + 1;

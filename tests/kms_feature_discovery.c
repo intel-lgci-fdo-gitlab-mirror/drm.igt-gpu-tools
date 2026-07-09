@@ -175,9 +175,11 @@ int igt_main() {
 			struct kmstest_connector_config config;
 			igt_output_t *output;
 			const char *encoder;
+			int num_outputs = 0;
 			int ret = -1;
 
 			for_each_connected_output(&display, output) {
+				num_outputs++;
 				kmstest_get_connector_config(fd, output->config.connector->connector_id, -1, &config);
 				encoder = kmstest_encoder_type_str(config.encoder->encoder_type);
 
@@ -185,16 +187,20 @@ int igt_main() {
 				if (ret == 0)
 					break;
 			}
-			igt_require_f(ret == 0, "No DP-MST configuration found.\n");
+			igt_require_f(ret == 0,
+				      "No DP-MST config found (checked %d outputs).\n",
+				      num_outputs);
 		}
 
 		igt_describe("Make sure that we have at least one HDR-capable panel.");
 		igt_subtest("hdr") {
 			igt_output_t *output;
 			unsigned int max_bpc;
+			int num_outputs = 0;
 			bool found = false;
 
 			for_each_connected_output(&display, output) {
+				num_outputs++;
 				if (!igt_output_has_prop(output, IGT_CONNECTOR_MAX_BPC))
 					continue;
 
@@ -214,15 +220,18 @@ int igt_main() {
 			}
 
 			igt_require_f(found,
-				      "No HDR-capable panel found with max bpc, HDR metadata, and EDID HDR support.\n");
+				      "No HDR-capable panel found (checked %d outputs).\n",
+				      num_outputs);
 		}
 
 		igt_describe("Make sure that we have at least one VRR-capable panel.");
 		igt_subtest("vrr") {
 			igt_output_t *output;
+			int num_outputs = 0;
 			bool found = false;
 
 			for_each_connected_output(&display, output) {
+				num_outputs++;
 				if (!igt_output_has_prop(output, IGT_CONNECTOR_VRR_CAPABLE))
 					continue;
 
@@ -233,15 +242,19 @@ int igt_main() {
 				break;
 			}
 
-			igt_require_f(found, "No VRR-capable panel found.\n");
+			igt_require_f(found,
+				      "No VRR-capable panel found (checked %d outputs).\n",
+				      num_outputs);
 		}
 
 		igt_describe("Make sure that we have at least one DSC-capable sink.");
 		igt_subtest("dsc") {
 			igt_output_t *output;
+			int num_outputs = 0;
 			bool found = false;
 
 			for_each_connected_output(&display, output) {
+				num_outputs++;
 				if (!igt_is_dsc_supported_by_sink(fd, output->name))
 					continue;
 
@@ -249,7 +262,9 @@ int igt_main() {
 				break;
 			}
 
-			igt_require_f(found, "No DSC-capable sink found.\n");
+			igt_require_f(found,
+				      "No DSC-capable sink found (checked %d outputs).\n",
+				      num_outputs);
 		}
 	}
 }

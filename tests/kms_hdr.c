@@ -299,9 +299,17 @@ static void test_bpc_switch(data_t *data, uint32_t flags)
 
 				igt_dynamic_f("pipe-%s-%s-%s",
 					      igt_crtc_name(crtc), output->name,
-					      igt_format_str(hdr_test_formats[i]))
+					      igt_format_str(hdr_test_formats[i])) {
+					igt_require_f(igt_plane_has_format_mod(data->primary,
+									       hdr_test_formats[i],
+									       DRM_FORMAT_MOD_LINEAR),
+						      "%s: Primary plane doesn't support format %s.\n",
+						      igt_output_name(output),
+						      igt_format_str(hdr_test_formats[i]));
+
 					test_bpc_switch_on_output(data, crtc, output,
 								  hdr_test_formats[i], flags);
+				}
 
 				test_fini(data);
 			}

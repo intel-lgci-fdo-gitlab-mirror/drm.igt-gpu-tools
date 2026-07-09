@@ -36,6 +36,7 @@
 #ifdef HAVE_CHAMELIUM
 #include "igt_chamelium.h"
 #endif
+#include "igt_hdr.h"
 #include "igt_kms.h"
 #include "igt_psr.h"
 #include "igt_sysfs.h"
@@ -62,6 +63,18 @@
  *
  * SUBTEST: dp-mst
  * Description: Make sure that we have DP-MST configuration.
+ *
+ * SUBTEST: hdr
+ * Description: Make sure that we have at least one HDR-capable panel.
+ * Mega feature: HDR
+ *
+ * SUBTEST: vrr
+ * Description: Make sure that we have at least one VRR-capable panel.
+ * Mega feature: VRR
+ *
+ * SUBTEST: dsc
+ * Description: Make sure that we have at least one DSC-capable sink.
+ * Mega feature: DSC
  *
  * arg[1].values: 1, 2, 3, 4
  */
@@ -173,6 +186,70 @@ int igt_main() {
 					break;
 			}
 			igt_require_f(ret == 0, "No DP-MST configuration found.\n");
+		}
+
+		igt_describe("Make sure that we have at least one HDR-capable panel.");
+		igt_subtest("hdr") {
+			igt_output_t *output;
+			unsigned int max_bpc;
+			bool found = false;
+
+			for_each_connected_output(&display, output) {
+				if (!igt_output_has_prop(output, IGT_CONNECTOR_MAX_BPC))
+					continue;
+
+				if (!igt_get_output_max_bpc(output, &max_bpc) ||
+				    max_bpc < 10)
+					continue;
+
+				if (!igt_output_has_prop(output,
+							 IGT_CONNECTOR_HDR_OUTPUT_METADATA))
+					continue;
+
+				if (!igt_is_panel_hdr(fd, output))
+					continue;
+
+				found = true;
+				break;
+			}
+
+			igt_require_f(found,
+				      "No HDR-capable panel found with max bpc, HDR metadata, and EDID HDR support.\n");
+		}
+
+		igt_describe("Make sure that we have at least one VRR-capable panel.");
+		igt_subtest("vrr") {
+			igt_output_t *output;
+			bool found = false;
+
+			for_each_connected_output(&display, output) {
+				if (!igt_output_has_prop(output, IGT_CONNECTOR_VRR_CAPABLE))
+					continue;
+
+				if (!igt_output_get_prop(output, IGT_CONNECTOR_VRR_CAPABLE))
+					continue;
+
+				found = true;
+				break;
+			}
+
+			igt_require_f(found, "No VRR-capable panel found.\n");
+		}
+
+		igt_describe("Make sure that we have at least one DSC-capable sink.");
+		igt_subtest("dsc") {
+			igt_output_t *output;
+			bool found = false;
+
+			for_each_connected_output(&display, output) {
+				if (!igt_is_dsc_supported_by_sink(fd, output->name))
+					continue;
+
+				found = true;
+				break;
+			}
+
+			igt_require_f(found, "No DSC-capable sink found.\n");
 		}
 	}
 }

@@ -25,6 +25,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <limits.h>
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>

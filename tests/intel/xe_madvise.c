@@ -397,8 +397,8 @@ static void test_dontneed_after_mmap(int fd)
 		char *ptr = (char *)map;
 		int sig;
 
-		old_sigsegv = signal(SIGSEGV, (__sighandler_t)sigtrap);
-		old_sigbus = signal(SIGBUS, (__sighandler_t)sigtrap);
+		old_sigsegv = signal(SIGSEGV, (sighandler_t)sigtrap);
+		old_sigbus = signal(SIGBUS, (sighandler_t)sigtrap);
 
 		sig = sigsetjmp(jmp, 1); /* savemask=1: save/restore signal mask */
 		switch (sig) {

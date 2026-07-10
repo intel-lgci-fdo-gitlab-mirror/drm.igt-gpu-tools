@@ -181,3 +181,7 @@ igt@kms_flip_scaled_crc@.*linear-reflect-x
 igt@kms_pm_dc@dc3co-.*
 igt@kms_vrr@lobf-dc3co
 ########################################
+# Valid skip :- For display ver < 35
+########################################
+igt@kms_chamelium_color_pipeline@plane-lut3d-green-only
+########################################

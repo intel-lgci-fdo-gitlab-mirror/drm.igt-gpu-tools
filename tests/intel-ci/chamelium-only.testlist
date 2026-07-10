@@ -14,6 +14,15 @@ igt@kms_chamelium_color@ctm-negative
 igt@kms_chamelium_color@ctm-red-to-blue
 igt@kms_chamelium_color@degamma
 igt@kms_chamelium_color@gamma
+igt@kms_chamelium_color_pipeline@plane-ctm3x4
+igt@kms_chamelium_color_pipeline@plane-ctm3x4-lut1d
+igt@kms_chamelium_color_pipeline@plane-lut1d
+igt@kms_chamelium_color_pipeline@plane-lut1d-ctm3x4
+igt@kms_chamelium_color_pipeline@plane-lut1d-ctm3x4-lut1d
+igt@kms_chamelium_color_pipeline@plane-lut1d-lut1d
+igt@kms_chamelium_color_pipeline@plane-lut1d-post-ctm3x4
+igt@kms_chamelium_color_pipeline@plane-lut1d-pre-ctm3x4
+igt@kms_chamelium_color_pipeline@plane-lut3d-green-only
 igt@kms_chamelium_edid@dp-edid-read
 igt@kms_chamelium_edid@dp-edid-resolution-list
 igt@kms_chamelium_edid@dp-edid-stress-resolution-4k
@@ -71,6 +80,8 @@ igt@kms_chamelium_hpd@hdmi-hpd-after-hibernate
 # Suspend operations can cause system hangs or connection timeouts,
 # so isolating them at the tail ensures stability of main test
 # execution.
+igt@kms_chamelium_audio@dp-audio-after-suspend
+igt@kms_chamelium_audio@hdmi-audio-after-suspend
 igt@kms_chamelium_edid@dp-edid-change-during-suspend
 igt@kms_chamelium_edid@hdmi-edid-change-during-suspend
 igt@kms_chamelium_hpd@common-hpd-after-suspend

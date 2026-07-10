@@ -61,7 +61,7 @@ get_available_counters(struct msm_device *dev, bool global)
 	}
 }
 
-int igt_main(void)
+int igt_main()
 {
 	/* device instance for global counter collection: */
 	struct msm_device *dev_global = NULL;

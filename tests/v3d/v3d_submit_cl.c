@@ -218,7 +218,7 @@ int igt_main()
 		job->submit->flags = DRM_V3D_SUBMIT_CL_FLUSH_CACHE;
 
 		if (!igt_v3d_get_param(fd, DRM_V3D_PARAM_SUPPORTS_CACHE_FLUSH)) {
-			do_ioctl_err(fd, DRM_IOCTL_V3D_SUBMIT_CL, &job->submit, EINVAL);
+			do_ioctl_err(fd, DRM_IOCTL_V3D_SUBMIT_CL, job->submit, EINVAL);
 		} else {
 			job->submit->out_sync = syncobj_create(fd, DRM_SYNCOBJ_CREATE_SIGNALED);
 
@@ -238,7 +238,7 @@ int igt_main()
 		job->submit->flags = DRM_V3D_SUBMIT_EXTENSION;
 
 		if (!igt_v3d_get_param(fd, DRM_V3D_PARAM_SUPPORTS_MULTISYNC_EXT)) {
-			do_ioctl_err(fd, DRM_IOCTL_V3D_SUBMIT_CL, &job->submit, EINVAL);
+			do_ioctl_err(fd, DRM_IOCTL_V3D_SUBMIT_CL, job->submit, EINVAL);
 		} else {
 			igt_v3d_set_multisync(&ms, V3D_RENDER);
 			job->submit->extensions = to_user_pointer(&ms);

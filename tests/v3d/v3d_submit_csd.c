@@ -214,8 +214,8 @@ int igt_main()
 		igt_v3d_free_csd_job(fd, job2);
 	}
 
-	igt_describe("Test a valid submission with a multisync without syncobjs.");
-	igt_subtest("valid-multisync-submission") {
+	igt_describe("Test an invalid submission with a multisync without syncobjs.");
+	igt_subtest("empty-multisync-submission") {
 		struct drm_v3d_multi_sync ms = { };
 		struct v3d_csd_job *job = igt_v3d_empty_shader(fd);
 
@@ -227,7 +227,7 @@ int igt_main()
 			igt_v3d_set_multisync(&ms, V3D_CSD);
 			job->submit->extensions = to_user_pointer(&ms);
 
-			do_ioctl(fd, DRM_IOCTL_V3D_SUBMIT_CSD, job->submit);
+			do_ioctl_err(fd, DRM_IOCTL_V3D_SUBMIT_CSD, job->submit, EINVAL);
 		}
 
 		igt_v3d_free_csd_job(fd, job);

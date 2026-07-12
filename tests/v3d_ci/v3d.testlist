@@ -27,7 +27,7 @@ igt@v3d/v3d_submit_cl@valid-submission
 igt@v3d/v3d_submit_cl@single-out-sync
 igt@v3d/v3d_submit_cl@single-in-sync
 igt@v3d/v3d_submit_cl@simple-flush-cache
-igt@v3d/v3d_submit_cl@valid-multisync-submission
+igt@v3d/v3d_submit_cl@empty-multisync-submission
 igt@v3d/v3d_submit_cl@multiple-job-submission
 igt@v3d/v3d_submit_cl@multisync-out-syncs
 igt@v3d/v3d_submit_cl@multi-and-single-sync
@@ -45,7 +45,7 @@ igt@v3d/v3d_submit_csd@bad-multisync-in-sync
 igt@v3d/v3d_submit_csd@valid-submission
 igt@v3d/v3d_submit_csd@single-out-sync
 igt@v3d/v3d_submit_csd@single-in-sync
-igt@v3d/v3d_submit_csd@valid-multisync-submission
+igt@v3d/v3d_submit_csd@empty-multisync-submission
 igt@v3d/v3d_submit_csd@multiple-job-submission
 igt@v3d/v3d_submit_csd@multisync-out-syncs
 igt@v3d/v3d_submit_csd@multi-and-single-sync

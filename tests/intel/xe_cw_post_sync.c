@@ -4,11 +4,11 @@
  */
 
 /**
- * TEST: Tests for Compute walker interrupt on non msix mode.
+ * TEST: Tests for Compute walker post sync interrupt
  * Category: Core
  * Mega feature: General Core features
  * Sub-category: Compute walker interrupt
- * Functionality: Compute walker interrupt on non msix mode
+ * Functionality: Compute walker post sync interrupt notification
  * Test category: functionality test
  */
 #include "gpgpu_shader.h"
@@ -86,7 +86,7 @@ static struct intel_bb *xe_bb_create_on_offset(int fd, uint32_t exec_queue, uint
 	return ibb;
 }
 
-static struct gpgpu_shader *get_non_msix_shader(int fd, const uint64_t flags)
+static struct gpgpu_shader *get_cw_post_sync_shader(int fd, const uint64_t flags)
 {
 	static struct gpgpu_shader *shader;
 
@@ -137,8 +137,8 @@ static void *thread1_fn(void *arg)
 	intel_bb_add_intel_buf(ibb, t_data->post_sync, true);
 	intel_bb_add_intel_buf(ibb, poll_buf, true);
 
-	shader1 = get_non_msix_shader(t_data->fd, SHADER_SIMPLE_DWORD);
-	shader2 = get_non_msix_shader(t_data->fd, SHADER_LOOP);
+	shader1 = get_cw_post_sync_shader(t_data->fd, SHADER_SIMPLE_DWORD);
+	shader2 = get_cw_post_sync_shader(t_data->fd, SHADER_LOOP);
 
 	intel_bb_ptr_set(ibb, BATCH_STATE_SPLIT);
 
@@ -236,8 +236,8 @@ static void *thread2_fn(void *arg)
 }
 
 /**
- * SUBTEST: walker-interrupt-notification-non-msix
- * Description: Validate walker interrupt notification in non msix mode.
+ * SUBTEST: walker-post-sync
+ * Description: Validate walker post sync interrupt notification.
  * Run type: FULL
  */
 static void test_walker_notification(int fd, struct drm_xe_engine_class_instance *hwe)
@@ -281,10 +281,10 @@ int igt_main()
 
 	igt_fixture() {
 		fd = drm_open_driver(DRIVER_XE);
-		igt_require(intel_graphics_ver(intel_get_drm_devid(fd)) == IP_VER(35, 11));
+		igt_require(intel_graphics_ver(intel_get_drm_devid(fd)) >= IP_VER(35, 11));
 	}
 
-	igt_subtest_with_dynamic("walker-interrupt-notification-non-msix") {
+	igt_subtest_with_dynamic("walker-post-sync") {
 		xe_for_each_engine(fd, hwe) {
 			if (hwe->engine_class == DRM_XE_ENGINE_CLASS_COMPUTE) {
 				igt_dynamic_f("%s%d", xe_engine_class_string(hwe->engine_class),

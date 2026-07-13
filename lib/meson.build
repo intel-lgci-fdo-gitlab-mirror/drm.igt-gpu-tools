@@ -306,13 +306,17 @@ genxml_gen_deps = files(
     'intel/genxml/gen70.xml',
     'intel/genxml/gen75.xml',
     'intel/genxml/gen80.xml',
+    'intel/genxml/gen90.xml',
+    'intel/genxml/gen110.xml',
+    'intel/genxml/gen120.xml',
+    'intel/genxml/gen125.xml',
 )
 
 # Ordered list of all gens, oldest first.  Pack headers use earlier
 # gens as baselines to omit unchanged inherited layouts.  Decode headers
 # stay complete for each gen because decode does not fall back to older
 # tables.
-genxml_gens = []
+genxml_gens = ['gen90', 'gen110', 'gen120', 'gen125']
 
 genxml_pack_headers = []
 genxml_decode_headers = []

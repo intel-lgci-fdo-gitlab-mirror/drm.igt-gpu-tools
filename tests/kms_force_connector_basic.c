@@ -177,13 +177,17 @@ static void force_load_detect(int drm_fd, drmModeConnectorPtr connector, drmMode
 static void force_connector_state(int drm_fd, drmModeConnectorPtr connector)
 {
 	igt_display_t display;
-	drmModeConnector *temp;
+	drmModeConnector *baseline, *temp;
 
 	igt_display_require(&display, drm_fd);
 
 	/* Reset display before attempt to use it. */
 	igt_display_reset(&display);
 	igt_display_commit(&display);
+
+	kmstest_force_connector(drm_fd, connector, FORCE_CONNECTOR_UNSPECIFIED);
+	baseline = drmModeGetConnector(drm_fd, connector->connector_id);
+	igt_assert(baseline);
 
 	/* Force the connector on and check the reported values. */
 	kmstest_force_connector(drm_fd, connector, FORCE_CONNECTOR_ON);
@@ -207,9 +211,10 @@ static void force_connector_state(int drm_fd, drmModeConnectorPtr connector)
 				FORCE_CONNECTOR_UNSPECIFIED);
 	temp = drmModeGetConnectorCurrent(drm_fd,
 					  connector->connector_id);
-	igt_assert_eq(temp->connection, connector->connection);
+	igt_assert_eq(temp->connection, baseline->connection);
 	drmModeFreeConnector(temp);
 
+	drmModeFreeConnector(baseline);
 	igt_display_fini(&display);
 }
 

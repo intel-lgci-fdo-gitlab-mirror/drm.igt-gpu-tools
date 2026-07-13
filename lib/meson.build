@@ -293,13 +293,59 @@ foreach f: iga64_assembly_sources
 	)
 endforeach
 
+# genxml pack-header generation
+genxml_gen_deps = files(
+    'intel/genxml/gen_pack_header.py',
+    'intel/genxml/gen_decode_header.py',
+    'intel/genxml/intel_genxml.py',
+    'intel/genxml/util.py',
+)
+
+# Ordered list of all gens, oldest first.  Pack headers use earlier
+# gens as baselines to omit unchanged inherited layouts.  Decode headers
+# stay complete for each gen because decode does not fall back to older
+# tables.
+genxml_gens = []
+
+genxml_pack_headers = []
+genxml_decode_headers = []
+genxml_prev_gens = []
+foreach gen : genxml_gens
+    cmd = [python3, '@INPUT@', '--engines=render,blitter,compute']
+    decode_cmd = [python3, '@INPUT@', '--engines=render,blitter,compute']
+    foreach baseline : genxml_prev_gens
+        cmd += ['--baseline',
+                meson.current_source_dir() / 'intel' / 'genxml' / baseline + '.xml']
+    endforeach
+    genxml_prev_gens += gen
+    genxml_pack_headers += custom_target(gen + '_pack.h',
+        input : ['intel/genxml/gen_pack_header.py', 'intel/genxml/' + gen + '.xml'],
+        output : gen + '_pack.h',
+        command : cmd,
+        capture : true,
+        depend_files : genxml_gen_deps,
+    )
+    genxml_decode_headers += custom_target(gen + '_decode.h',
+        input : ['intel/genxml/gen_decode_header.py', 'intel/genxml/' + gen + '.xml'],
+        output : gen + '_decode.h',
+        command : decode_cmd,
+        capture : true,
+        depend_files : genxml_gen_deps,
+    )
+endforeach
+
+genxml_dep = declare_dependency(
+    sources : genxml_pack_headers + genxml_decode_headers,
+    include_directories : include_directories('.'),
+)
+
 lib_intermediates = []
 foreach f: lib_sources
     name = f.underscorify()
     lib = static_library('igt-' + name,
 	[ f, lib_version ],
 	include_directories: inc,
-	dependencies : lib_deps,
+	dependencies : lib_deps + [genxml_dep],
 	c_args : [
 	    '-DIGT_DATADIR="@0@"'.format(join_paths(prefix, datadir)),
 	    '-DIGT_SRCDIR="@0@"'.format(srcdir),

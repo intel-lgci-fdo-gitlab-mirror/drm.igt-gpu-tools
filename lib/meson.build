@@ -299,6 +299,13 @@ genxml_gen_deps = files(
     'intel/genxml/gen_decode_header.py',
     'intel/genxml/intel_genxml.py',
     'intel/genxml/util.py',
+    'intel/genxml/gen40.xml',
+    'intel/genxml/gen45.xml',
+    'intel/genxml/gen50.xml',
+    'intel/genxml/gen60.xml',
+    'intel/genxml/gen70.xml',
+    'intel/genxml/gen75.xml',
+    'intel/genxml/gen80.xml',
 )
 
 # Ordered list of all gens, oldest first.  Pack headers use earlier

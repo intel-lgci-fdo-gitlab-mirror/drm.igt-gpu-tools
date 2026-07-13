@@ -290,7 +290,6 @@ int igt_main()
 				igt_dynamic_f("%s%d", xe_engine_class_string(hwe->engine_class),
 					      hwe->engine_instance)
 					test_walker_notification(fd, hwe);
-				break;
 			}
 		}
 	}

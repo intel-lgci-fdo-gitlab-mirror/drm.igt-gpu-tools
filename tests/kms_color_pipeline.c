@@ -349,6 +349,7 @@ run_tests_for_plane(data_t *data)
 
 int igt_main()
 {
+	int has_plane_color_pipeline = 0;
 	data_t data = {};
 
 	igt_fixture() {
@@ -363,9 +364,13 @@ int igt_main()
 		if (drmSetClientCap(data.drm_fd, DRM_CLIENT_CAP_ATOMIC, 1) == 0)
 			data.display.is_atomic = 1;
 
+		if (drmSetClientCap(data.drm_fd, DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE, 1) == 0)
+			has_plane_color_pipeline = 1;
+
 		kmstest_set_vt_graphics_mode();
 
 		igt_display_require(&data.display, data.drm_fd);
+		data.display.has_plane_color_pipeline = has_plane_color_pipeline;
 		igt_require(data.display.is_atomic);
 	}
 

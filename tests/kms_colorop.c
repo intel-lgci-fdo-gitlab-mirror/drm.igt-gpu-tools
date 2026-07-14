@@ -418,10 +418,14 @@ int igt_main_args("d", long_options, help_str, opt_handler, NULL)
 		igt_require_f(!ret, "error setting DRM_CLIENT_CAP_WRITEBACK_CONNECTORS\n");
 
 		igt_display_require(&display, display.drm_fd);
+		if (drmSetClientCap(display.drm_fd, DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE, 1) == 0)
+			display.has_plane_color_pipeline = 1;
 
 		kmstest_set_vt_graphics_mode();
 
 		igt_display_require(&display, display.drm_fd);
+		if (drmSetClientCap(display.drm_fd, DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE, 1) == 0)
+			display.has_plane_color_pipeline = 1;
 
 		igt_require(display.is_atomic);
 	}

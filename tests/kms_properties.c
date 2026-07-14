@@ -340,9 +340,17 @@ static void colorop_properties(igt_display_t *display, bool atomic)
 	bool found_any = false, found;
 	igt_output_t *output;
 	igt_crtc_t *crtc;
+	int ret;
 
 	/* colorops are only available with atomic */
 	igt_skip_on(!display->is_atomic);
+
+	ret = drmSetClientCap(display->drm_fd, DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE, 1);
+	igt_skip_on_f(ret, "DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE not supported\n");
+
+	igt_display_fini(display);
+	igt_display_require(display, display->drm_fd);
+	display->has_plane_color_pipeline = true;
 
 	for_each_crtc(display, crtc) {
 		found = false;
@@ -368,6 +376,12 @@ static void colorop_properties(igt_display_t *display, bool atomic)
 			}
 		}
 	}
+
+	ret = drmSetClientCap(display->drm_fd, DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE, 0);
+	igt_assert_eq(ret, 0);
+
+	igt_display_fini(display);
+	igt_display_require(display, display->drm_fd);
 
 	igt_skip_on(!found_any);
 }

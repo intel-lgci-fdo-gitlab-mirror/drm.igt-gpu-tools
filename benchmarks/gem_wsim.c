@@ -2669,7 +2669,7 @@ static void do_xe_exec(struct workload *wrk, struct w_step *w)
 
 static void xe_w_step_sync_and_verify(struct w_step *w)
 {
-	if (!is_xe && w->type != BATCH)
+	if (!is_xe || w->type != BATCH)
 		return;
 
 	w_step_sync(w);

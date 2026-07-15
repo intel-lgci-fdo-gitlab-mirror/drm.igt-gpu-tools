@@ -134,5 +134,13 @@ int igt_main()
 				     "Invalid connected connector count, expected %d found %d\n",
 				     max(i, 1), diff_len);
 		}
+
+		free(already_connected);
+		free(newly_connected);
+		free(diff);
+	}
+
+	igt_fixture() {
+		close(drm_fd);
 	}
 }

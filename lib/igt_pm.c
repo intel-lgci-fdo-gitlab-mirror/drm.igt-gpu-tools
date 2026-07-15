@@ -1713,3 +1713,80 @@ unsigned int igt_read_pkgc_counter(int debugfs_root_fd)
 
 	return igt_get_dc_counter(str);
 }
+
+static int igt_pm_cpu_deep_sleep_control(const char *val)
+{
+	const char *cpu_root = "/sys/devices/system/cpu";
+	char state_path[512];
+	int count = 0;
+	struct dirent *de;
+	DIR *dir;
+
+	dir = opendir(cpu_root);
+	if (!dir)
+		return 0;
+
+	while ((de = readdir(dir))) {
+		int cpu, state = 1;
+
+		/* Match cpu topology entries named "cpu<N>" */
+		if (sscanf(de->d_name, "cpu%d", &cpu) != 1)
+			continue;
+
+		/*
+		 * Control state1 and deeper (keep state0 WFI unchanged),
+		 * walking consecutive states until one is missing.
+		 */
+		while (1) {
+			FILE *fp;
+
+			snprintf(state_path, sizeof(state_path),
+				 "%s/%s/cpuidle/state%d/disable",
+				 cpu_root, de->d_name, state++);
+
+			if (access(state_path, W_OK) != 0)
+				break;
+
+			/* Write '1' to disable, '0' to enable */
+			fp = fopen(state_path, "w");
+			if (fp) {
+				fprintf(fp, "%s", val);
+				fclose(fp);
+				count++;
+			}
+		}
+	}
+
+	closedir(dir);
+
+	return count;
+}
+
+/**
+ * igt_pm_disable_cpu_deep_sleep:
+ *
+ * Disables deep CPU idle states (C-states) to prevent IRQ latency spikes
+ * during vblank events. This is a system-wide operation that affects all CPUs.
+ *
+ * Disables state1 and deeper states while keeping state0 (WFI) unchanged
+ * to ensure stable vblank timing.
+ *
+ * Returns: the number of CPU idle states that were disabled (0 if none).
+ */
+int igt_pm_disable_cpu_deep_sleep(void)
+{
+	return igt_pm_cpu_deep_sleep_control("1");
+}
+
+/**
+ * igt_pm_enable_cpu_deep_sleep:
+ *
+ * Re-enables deep CPU idle states (C-states) that were previously disabled
+ * by igt_pm_disable_cpu_deep_sleep(). This restores power-saving idle states.
+ *
+ * Returns: the number of CPU idle states that were enabled (0 if none).
+ */
+int igt_pm_enable_cpu_deep_sleep(void)
+{
+	return igt_pm_cpu_deep_sleep_control("0");
+}

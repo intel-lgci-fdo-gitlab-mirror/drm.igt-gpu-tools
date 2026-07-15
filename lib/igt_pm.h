@@ -114,5 +114,7 @@ bool igt_dc_state_wait_entry(int debugfs_fd, int dc_flag, int prev_dc_count);
 const char *igt_dc_state_name(int dc_flag);
 void igt_require_dc_counter(int debugfs_fd, int dc_flag);
 unsigned int igt_read_pkgc_counter(int debugfs_root_fd);
+int igt_pm_disable_cpu_deep_sleep(void);
+int igt_pm_enable_cpu_deep_sleep(void);
 
 #endif /* IGT_PM_H */

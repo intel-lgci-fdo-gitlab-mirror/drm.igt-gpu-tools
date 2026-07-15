@@ -42,12 +42,20 @@
 #include <math.h>
 
 #include "i915/intel_drrs.h"
+#include "igt_pm.h"
 #include "xe/xe_query.h"
 
 /**
  * SUBTEST: basic
  * Description: Tests the vblank timing by iterating through all valid crtc/connector
  *              combinations
+ *
+ * SUBTEST: basic-no-cpu-idle
+ * Description: Tests vblank timing with CPU deep sleep disabled to verify
+ *              timestamp accuracy without CPU idle interference. This test
+ *              is for platforms lacking HW/SW get_scanout_position() support,
+ *              allowing them to verify vblank timestamp correctness without
+ *              external CPU wakeup latency interference.
  *
  * SUBTEST: basic-clone-single-crtc
  * Description: Test allows the use of a single CRTC for two connectors, such as VGA/HDMI,
@@ -1034,6 +1042,11 @@ static void run_test(const struct test_config *tconf)
 		test_combinations(tconf, connector_num);
 }
 
+static void restore_cpu_deep_sleep_at_exit(int sig)
+{
+	igt_pm_enable_cpu_deep_sleep();
+}
+
 static int opt_handler(int opt, int opt_index, void *data)
 {
 	switch (opt) {
@@ -1103,6 +1116,30 @@ int igt_main_args("det:", NULL, help_str, opt_handler, NULL)
 			};
 			run_test(&tconf);
 		}
+	}
+
+	/*
+	 * This subtest disables CPU deep sleep to eliminate wakeup latency
+	 * interference during vblank timestamp verification.
+	 *
+	 * NOTE: This is for platforms that have not yet implemented
+	 * get_scanout_position(). Once get_scanout_position() is properly
+	 * implemented, the vblank timestamp will be accurately compensated
+	 * regardless of CPU idle states, and this test becomes redundant
+	 * with the standard "basic" test.
+	 */
+	igt_describe("Tests vblank timing with CPU deep sleep disabled");
+	igt_subtest_with_dynamic("basic-no-cpu-idle") {
+		struct test_config tconf = {
+			.flags		= TEST_TIMINGS,
+			.name		= "basic-no-cpu-idle",
+			.resources	= drm_resources,
+		};
+
+		igt_require_f(igt_pm_disable_cpu_deep_sleep(),
+			      "Platform does not support CPU idle control\n");
+		igt_install_exit_handler(restore_cpu_deep_sleep_at_exit);
+		run_test(&tconf);
 	}
 
 	igt_fixture() {

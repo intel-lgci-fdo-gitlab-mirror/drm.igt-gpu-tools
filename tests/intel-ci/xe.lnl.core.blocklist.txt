@@ -11,6 +11,10 @@ igt@testdisplay
 igt@xe_pat@display-vs-wb-transient
 igt@fbdev@.*
 ##################################################################
+# Valid skip as test is applicable for Xe3p xpc and later platforms
+##################################################################
+igt@xe_cw_post_sync@walker-post-sync
+##################################################################
 # Expected skip as platform has no vram support
 ##################################################################
 igt@xe_create@create-big-vram

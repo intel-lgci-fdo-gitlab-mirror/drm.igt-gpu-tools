@@ -40,6 +40,10 @@ igt@xe_pat@pat-index-xelpg
 igt@xe_media_fill@media-fill
 igt@xe_pat@pat-index-xe2
 ##################################################################
+# Valid skip as test is applicable for Xe3p xpc and later platforms
+##################################################################
+igt@xe_cw_post_sync@walker-post-sync
+##################################################################
 # Valid Skip: Tests requiring multiple CCS (Compute Command
 # Streamers) engines — NVL exposes only a single CCS engine.
 ##################################################################

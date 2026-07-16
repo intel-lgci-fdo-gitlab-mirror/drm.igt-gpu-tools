@@ -81,7 +81,6 @@ igt@kms_plane_scaling@planes-.*upscale-.*downscale.*
 ##############################################################################
 # Valid skip: Simulation specific
 ##############################################################################
-igt@kms_pm_dc@dc3co-vpb-simulation
 igt@kms_simulation_hpd@sim-hpd
 ##############################################################################
 # Valid skip: Mei interface not supported MTL+

@@ -65,6 +65,11 @@ __test_sanity(int fd, int gt, int class, bool preempt_mode)
 		.property = DRM_XE_EXEC_QUEUE_SET_PROPERTY_PRIORITY,
 		.value = XE_EXEC_QUEUE_PRIORITY_NORMAL,
 	};
+	struct drm_xe_ext_set_property pxp_hwdrm = {
+		.base.name = DRM_XE_EXEC_QUEUE_EXTENSION_SET_PROPERTY,
+		.property = DRM_XE_EXEC_QUEUE_SET_PROPERTY_PXP_TYPE,
+		.value = DRM_XE_PXP_TYPE_HWDRM,
+	};
 	struct drm_xe_engine_class_instance vm_bind_eci = {
 		.engine_class = DRM_XE_ENGINE_CLASS_VM_BIND,
 	};
@@ -117,6 +122,17 @@ __test_sanity(int fd, int gt, int class, bool preempt_mode)
 
 	/* Specifying multiple MULTI_GROUP property is invalid */
 	multi_queue.base.next_extension = to_user_pointer(&multi_queue);
+	igt_assert_eq(__xe_exec_queue_create(fd, vm, 1, 1, eci, ext, &val), -EINVAL);
+
+	/*
+	 * HWDRM is the only supported PXP type and is display related, so it
+	 * cannot be combined with a multi-queue exec queue group. The
+	 * multi-queue property is chained before the PXP property here, so the
+	 * kernel rejects the combination with -EINVAL while processing the PXP
+	 * extension, before the PXP type is evaluated. The rejection therefore
+	 * happens regardless of whether PXP is supported on the platform.
+	 */
+	multi_queue.base.next_extension = to_user_pointer(&pxp_hwdrm);
 	igt_assert_eq(__xe_exec_queue_create(fd, vm, 1, 1, eci, ext, &val), -EINVAL);
 
 	/* Setting other queue properties are valid for Q0 */

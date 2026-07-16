@@ -2555,9 +2555,13 @@ bool generate_results(int dirfd)
 bool generate_results_path(char *resultspath)
 {
 	int dirfd = open(resultspath, O_DIRECTORY | O_RDONLY);
+	bool ret;
 
 	if (dirfd < 0)
 		return false;
 
-	return generate_results(dirfd);
+	ret = generate_results(dirfd);
+	close(dirfd);
+
+	return ret;
 }

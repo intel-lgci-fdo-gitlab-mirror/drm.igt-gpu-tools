@@ -42,6 +42,7 @@
 #include "executor.h"
 #include "kmemleak.h"
 #include "output_strings.h"
+#include "resultgen.h"
 #include "runnercomms.h"
 
 #define KMSG_HEADER "[IGT] "
@@ -2036,6 +2037,11 @@ static bool clear_old_results(char *path)
 		return false;
 	}
 
+	if (remove_file(dirfd, "results.old")) {
+		errf("Error clearing results.old : %m\n");
+		return false;
+	}
+
 	if (remove_file(dirfd, "uname.txt") ||
 	    remove_file(dirfd, "starttime.txt") ||
 	    remove_file(dirfd, "endtime.txt") ||
@@ -2472,6 +2478,48 @@ static int open_comms_if_valid(int resdirfd, size_t testidx)
 	return -1;
 }
 
+static int write_endtime(int resdirfd, double a_time)
+{
+	int timefd = openat(resdirfd, "endtime.txt", O_CREAT | O_WRONLY | O_EXCL, 0666);
+
+	if (timefd >= 0) {
+		dprintf(timefd, "%f\n", a_time);
+		close(timefd);
+		return 0;
+	}
+
+	return -errno;
+}
+
+static bool generate_partial_results(int resdirfd, struct settings *settings)
+{
+	char *results_path = settings->results_path;
+	double beg_time = timeofday_double();
+	double end_time;
+	bool ret;
+
+	if (!settings->save_results_after_each_test)
+		return true;
+
+	if (write_endtime(resdirfd, beg_time))
+		return true;
+
+	remove_file(resdirfd, "results.old");
+	renameat(resdirfd, "results.json", resdirfd, "results.old");
+
+	ret = generate_results_path(results_path);
+	if (settings->sync)
+		fsync(resdirfd);
+
+	end_time = timeofday_double();
+	if (settings->log_level >= LOG_LEVEL_NORMAL) {
+		outf("generating results took: %.6ffs\n", end_time - beg_time);
+		fflush(stdout);
+	}
+
+	return ret;
+}
+
 bool execute(struct execute_state *state,
 	     struct settings *settings,
 	     struct job_list *job_list)
@@ -2724,7 +2772,17 @@ bool execute(struct execute_state *state,
 			if (!initialize_execute_state_from_resume(resdirfd, state, settings, job_list))
 				return false;
 			state->time_left = time_left;
+			/* it should check option, also measure time taken */
+			if (!generate_partial_results(resdirfd, settings))
+				return false;
+
 			return execute(state, settings, job_list);
+		}
+
+		/* it should check option, also measure time taken */
+		if (!generate_partial_results(resdirfd, settings)) {
+			status = false;
+			break;
 		}
 	}
 
@@ -2737,10 +2795,7 @@ bool execute(struct execute_state *state,
 				     settings->kmemleak_each, settings->sync))
 			errf("Failed to collect kmemleak logs after the last test\n");
 
-	if ((timefd = openat(resdirfd, "endtime.txt", O_CREAT | O_WRONLY | O_EXCL, 0666)) >= 0) {
-		dprintf(timefd, "%f\n", timeofday_double());
-		close(timefd);
-	}
+	write_endtime(resdirfd, timeofday_double());
 
  end:
 	if (settings->enable_code_coverage && !settings->cov_results_per_test) {

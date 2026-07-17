@@ -1798,10 +1798,14 @@ static struct load_helper {
 	bool exit;
 	struct igt_helper_process igt_proc;
 	struct intel_buf src, dst;
+	bool disabled;
 } lh = { 0, };
 
 static void load_helper_signal_handler(int sig)
 {
+	if (lh.disabled)
+		return;
+
 	if (sig == SIGUSR2)
 		lh.load = lh.load == LOW ? HIGH : LOW;
 	else
@@ -1812,6 +1816,9 @@ static void load_helper_set_load(enum load load)
 {
 	igt_assert(lh.igt_proc.running);
 
+	if (lh.disabled)
+		return;
+
 	if (lh.load == load)
 		return;
 
@@ -1821,6 +1828,9 @@ static void load_helper_set_load(enum load load)
 
 static void load_helper_run(enum load load)
 {
+	if (lh.disabled)
+		return;
+
 	if (!render_copy)
 		return;
 
@@ -1856,6 +1866,9 @@ static void load_helper_run(enum load load)
 
 static void load_helper_stop(void)
 {
+	if (lh.disabled)
+		return;
+
 	if (!render_copy)
 		return;
 
@@ -1865,6 +1878,9 @@ static void load_helper_stop(void)
 
 static void load_helper_init(void)
 {
+	if (lh.disabled)
+		return;
+
 	if (!render_copy) {
 		igt_info("Running test without render_copy\n");
 		return;
@@ -1884,6 +1900,9 @@ static void load_helper_init(void)
 
 static void load_helper_fini(void)
 {
+	if (lh.disabled)
+		return;
+
 	if (!render_copy)
 		return;
 
@@ -4981,6 +5000,10 @@ static int opt_handler(int opt, int opt_index, void *data)
 		oa_trace = true;
 		igt_debug("Trace enabled\n");
 		break;
+	case 'd':
+		lh.disabled = true;
+		igt_info("Load helper disabled\n");
+		break;
 	default:
 		return IGT_OPT_HANDLER_ERROR;
 	}
@@ -4989,15 +5012,17 @@ static int opt_handler(int opt, int opt_index, void *data)
 }
 
 static const char *help_str =  "  --trace		| -t\t\tEnable ftrace\n"
-			       "  --trace_buf_size_mb	| -b\t\tSet ftrace buffer size in MB (default = 1, min = 1, max = 20)\n";
+			       "  --trace_buf_size_mb	| -b\t\tSet ftrace buffer size in MB (default = 1, min = 1, max = 20)\n"
+			       "  --disable-load-helper | -d\t\tDisable load helper\n";
 
 static struct option long_options[] = {
 	{"trace", 0, 0, 't'},
 	{"trace_buf_size_mb", 0, 0, 'b'},
+	{"disable-load-helper", 0, 0, 'd'},
 	{ NULL, 0, 0, 0 }
 };
 
-int igt_main_args("b:t", long_options, help_str, opt_handler, NULL)
+int igt_main_args("b:td", long_options, help_str, opt_handler, NULL)
 {
 	const struct sync_section {
 		const char *name;

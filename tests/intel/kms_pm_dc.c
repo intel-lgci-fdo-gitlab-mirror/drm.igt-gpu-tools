@@ -315,6 +315,16 @@ static void setup_videoplayback(data_t *data)
 	create_color_fb(data, &data->fb_rgr, red_green_red);
 }
 
+static void commit_initial_dc3co_frame(data_t *data)
+{
+	igt_plane_t *primary;
+
+	primary = igt_output_get_plane_type(data->output,
+					    DRM_PLANE_TYPE_PRIMARY);
+	igt_plane_set_fb(primary, &data->fb_rgb);
+	igt_display_commit(&data->display);
+}
+
 static void check_dc3co_with_videoplayback_like_load(data_t *data)
 {
 	igt_plane_t *primary;
@@ -356,8 +366,9 @@ static void test_dc3co_vpb_simulation(data_t *data)
 {
 	igt_require_dc_counter(data->debugfs_fd, IGT_INTEL_CHECK_DC3CO);
 	setup_output(data);
-	setup_dc3co(data);
 	setup_videoplayback(data);
+	commit_initial_dc3co_frame(data);
+	setup_dc3co(data);
 	check_dc3co_with_videoplayback_like_load(data);
 	cleanup_dc3co_fbs(data);
 }
@@ -471,8 +482,9 @@ static void test_dc3co_framedrop(data_t *data)
 {
 	igt_require_dc_counter(data->debugfs_fd, IGT_INTEL_CHECK_DC3CO);
 	setup_output(data);
-	setup_dc3co(data);
 	setup_videoplayback(data);
+	commit_initial_dc3co_frame(data);
+	setup_dc3co(data);
 	detect_dc3co_framedrop(data);
 	cleanup_dc3co_fbs(data);
 }
@@ -528,8 +540,9 @@ static void test_dc3co_vpb_framegap(data_t *data)
 {
 	igt_require_dc_counter(data->debugfs_fd, IGT_INTEL_CHECK_DC3CO);
 	setup_output(data);
-	setup_dc3co(data);
 	setup_videoplayback(data);
+	commit_initial_dc3co_frame(data);
+	setup_dc3co(data);
 	check_dc3co_with_framegap_load(data);
 	cleanup_dc3co_fbs(data);
 }
@@ -741,9 +754,10 @@ static void test_dc3co_after_dc6(data_t *data)
 	igt_require_dc_counter(data->debugfs_fd, IGT_INTEL_CHECK_DC6);
 
 	setup_output(data);
+	setup_videoplayback(data);
+	commit_initial_dc3co_frame(data);
 	setup_dc3co(data);
 	test_dc_state_dpms(data, IGT_INTEL_CHECK_DC6);
-	setup_videoplayback(data);
 	check_dc3co_with_videoplayback_like_load(data);
 	cleanup_dc3co_fbs(data);
 }

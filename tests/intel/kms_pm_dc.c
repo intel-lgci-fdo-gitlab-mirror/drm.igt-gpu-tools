@@ -125,14 +125,22 @@ typedef struct {
 	igt_display_t display;
 	struct igt_fb fb_white, fb_rgb, fb_rgr;
 	enum psr_mode op_psr_mode;
+	uint32_t dc3co_fb_format;
 	drmModeModeInfo *mode;
 	igt_output_t *output;
 	bool runtime_suspend_disabled;
 } data_t;
 
-struct dc3co_test_mode {
+struct dc3co_test_case {
 	enum psr_mode mode;
+	uint32_t fb_format;
 	const char *name;
+};
+
+static const struct dc3co_test_case dc3co_cases[] = {
+	{ PSR_MODE_2, DRM_FORMAT_XRGB8888, "psr2-xrgb8888" },
+	{ PSR_MODE_2, DRM_FORMAT_NV12,     "psr2-yuv420" },
+	{ PR_MODE,    DRM_FORMAT_XRGB8888, "pr-xrgb8888" },
 };
 
 static void assert_dc_counter(data_t *data, int dc_flag, uint32_t prev_dc_count);
@@ -275,7 +283,7 @@ static void create_color_fb(data_t *data, igt_fb_t *fb, color_t *fb_color)
 	fb_id = igt_create_fb(data->drm_fd,
 			      data->mode->hdisplay,
 			      data->mode->vdisplay,
-			      DRM_FORMAT_XRGB8888,
+			      data->dc3co_fb_format,
 			      DRM_FORMAT_MOD_LINEAR,
 			      fb);
 	igt_assert(fb_id);
@@ -300,6 +308,15 @@ static void assert_dc_counter_negative(data_t *data, int dc_flag, uint32_t prev_
 
 static void setup_videoplayback(data_t *data)
 {
+	igt_plane_t *primary;
+
+	primary = igt_output_get_plane_type(data->output,
+					    DRM_PLANE_TYPE_PRIMARY);
+	igt_require_f(igt_plane_has_format_mod(primary, data->dc3co_fb_format,
+					       DRM_FORMAT_MOD_LINEAR),
+					       "Primary plane does not support format %s\n",
+					       igt_format_str(data->dc3co_fb_format));
+
 	color_t red_green_blue[] = {
 		{ 1.0, 0.0, 0.0 },
 		{ 0.0, 1.0, 0.0 },
@@ -928,14 +945,10 @@ int igt_main()
 	igt_describe("In this test we make sure that system enters DC3CO "
 		     "when PSR2 or PR is active and system is in SLEEP state");
 	igt_subtest_with_dynamic("dc3co-vpb-simulation") {
-		static const struct dc3co_test_mode dc3co_modes[] = {
-			{ PSR_MODE_2, "psr2" },
-			{ PR_MODE,    "pr"   },
-		};
-
-		for (int i = 0; i < ARRAY_SIZE(dc3co_modes); i++) {
-			const char *name = dc3co_modes[i].name;
-			data.op_psr_mode = dc3co_modes[i].mode;
+		for (int i = 0; i < ARRAY_SIZE(dc3co_cases); i++) {
+			const char *name = dc3co_cases[i].name;
+			data.op_psr_mode = dc3co_cases[i].mode;
+			data.dc3co_fb_format = dc3co_cases[i].fb_format;
 
 			igt_dynamic_f("%s", name) {
 				igt_require_f(intel_display_ver(data.devid) >= 35,
@@ -954,14 +967,10 @@ int igt_main()
 	igt_describe("Validate that no frame drops occur during DC3CO entry "
 			     "while alternating framebuffers with PSR2 or Panel Replay active");
 	igt_subtest_with_dynamic("dc3co-framedrop-check") {
-		static const struct dc3co_test_mode dc3co_modes[] = {
-			{ PSR_MODE_2, "psr2" },
-			{ PR_MODE,    "pr"   },
-		};
-
-		for (int i = 0; i < ARRAY_SIZE(dc3co_modes); i++) {
-			const char *name = dc3co_modes[i].name;
-			data.op_psr_mode = dc3co_modes[i].mode;
+		for (int i = 0; i < ARRAY_SIZE(dc3co_cases); i++) {
+			const char *name = dc3co_cases[i].name;
+			data.op_psr_mode = dc3co_cases[i].mode;
+			data.dc3co_fb_format = dc3co_cases[i].fb_format;
 
 			igt_dynamic_f("%s", name) {
 				igt_require_f(intel_display_ver(data.devid) >= 35,
@@ -980,17 +989,14 @@ int igt_main()
 	igt_describe("Verify DC3CO entry is still functional after a DC6 entry "
 		     "and exit cycle");
 	igt_subtest_with_dynamic("dc3co-after-dc6") {
-		static const struct dc3co_test_mode dc3co_modes[] = {
-			{ PSR_MODE_2, "psr2" },
-			{ PR_MODE,    "pr"   },
-		};
 
 		igt_require_f(igt_pm_pc8_plus_residencies_enabled(data.msr_fd),
 			      "PC8+ residencies not supported\n");
 
-		for (int i = 0; i < ARRAY_SIZE(dc3co_modes); i++) {
-			const char *name = dc3co_modes[i].name;
-			data.op_psr_mode = dc3co_modes[i].mode;
+		for (int i = 0; i < ARRAY_SIZE(dc3co_cases); i++) {
+			const char *name = dc3co_cases[i].name;
+			data.op_psr_mode = dc3co_cases[i].mode;
+			data.dc3co_fb_format = dc3co_cases[i].fb_format;
 
 			igt_dynamic_f("%s", name) {
 				igt_require_f(intel_display_ver(data.devid) >= 35,
@@ -1009,14 +1015,10 @@ int igt_main()
 	igt_describe("Validate DC3CO counter increments before and after a delay "
 		     "greater than 6 frame gaps during video-like load with PSR2/PR active");
 	igt_subtest_with_dynamic("dc3co-vpb-framegap") {
-		static const struct dc3co_test_mode dc3co_modes[] = {
-			{ PSR_MODE_2, "psr2" },
-			{ PR_MODE,    "pr"   },
-		};
-
-		for (int i = 0; i < ARRAY_SIZE(dc3co_modes); i++) {
-			const char *name = dc3co_modes[i].name;
-			data.op_psr_mode = dc3co_modes[i].mode;
+		for (int i = 0; i < ARRAY_SIZE(dc3co_cases); i++) {
+			const char *name = dc3co_cases[i].name;
+			data.op_psr_mode = dc3co_cases[i].mode;
+			data.dc3co_fb_format = dc3co_cases[i].fb_format;
 
 			igt_dynamic_f("%s", name) {
 				igt_require_f(intel_display_ver(data.devid) >= 35,
@@ -1060,6 +1062,7 @@ int igt_main()
 		igt_require_f(igt_pm_pc8_plus_residencies_enabled(data.msr_fd),
 			      "PC8+ residencies not supported\n");
 		igt_require(intel_display_ver(data.devid) >= 20);
+		data.dc3co_fb_format = DRM_FORMAT_XRGB8888;
 		test_deep_pkgc_state(&data);
 	}
 
@@ -1088,6 +1091,7 @@ int igt_main()
 		igt_require(psr_sink_support(data.drm_fd, data.debugfs_fd,
 					     PSR_MODE_1, NULL));
 		data.op_psr_mode = PSR_MODE_1;
+		data.dc3co_fb_format = DRM_FORMAT_XRGB8888;
 		psr_enable(data.drm_fd, data.debugfs_fd, data.op_psr_mode, NULL);
 		igt_require(!psr_disabled_check(data.debugfs_fd));
 		test_dc5_pageflip_negative(&data, IGT_INTEL_CHECK_DC5);

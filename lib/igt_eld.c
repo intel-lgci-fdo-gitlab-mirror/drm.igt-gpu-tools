@@ -33,11 +33,21 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "igt_aux.h"
 #include "igt_core.h"
 #include "igt_eld.h"
 
 #define ELD_PREFIX "eld#"
 #define ELD_DELIM " \t"
+
+/*
+ * The ALSA HDA HDMI/DP codec enumerates and creates its eld# procfs nodes
+ * asynchronously with respect to the graphics driver load and the
+ * i915/xe <-> snd_hda_intel audio-component binding. Poll for a short while
+ * so a not-yet-probed codec doesn't cause a spurious skip.
+ */
+#define ELD_SUPPORTED_TIMEOUT_MS 2000
+#define ELD_SUPPORTED_INTERVAL_MS 100
 
 /**
  * EDID-Like Data (ELD) is metadata parsed and exposed by ALSA for HDMI and
@@ -266,9 +276,8 @@ bool eld_has_igt(void)
 	return eld_get_igt(&eld);
 }
 
-/** eld_is_supported: check whether the ALSA procfs is enabled, audio cards
- * are found and ELDs are supported */
-bool eld_is_supported(void)
+/* eld_has_nodes: check whether any ALSA eld# procfs node exists */
+static bool eld_has_nodes(void)
 {
 	glob_t glob_buf = {0};
 	int ret;
@@ -283,6 +292,17 @@ bool eld_is_supported(void)
 	globfree(&glob_buf);
 
 	return has_elds;
+}
+
+/** eld_is_supported: check whether the ALSA procfs is enabled, audio cards
+ * are found and ELDs are supported.
+ *
+ * The eld# nodes are created asynchronously by the HDA HDMI codec, so poll
+ * for a bounded amount of time before giving up to avoid spurious skips. */
+bool eld_is_supported(void)
+{
+	return igt_wait(eld_has_nodes(), ELD_SUPPORTED_TIMEOUT_MS,
+			ELD_SUPPORTED_INTERVAL_MS);
 }
 
 #define ELD_MAX_SIZE 256

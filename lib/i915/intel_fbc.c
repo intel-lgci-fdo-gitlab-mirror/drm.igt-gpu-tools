@@ -204,7 +204,10 @@ static void intel_fbc_max_plane_size(igt_display_t *display, uint32_t *width, ui
 	const struct intel_device_info *info = intel_get_device_info(dev_id);
 	int ver = info->graphics_ver;
 
-	if (ver >= 10) {
+	if (ver >= 30) {
+		*width = 6144;
+		*height = 4096;
+	} else if (ver >= 10) {
 		*width = 5120;
 		*height = 4096;
 	} else if (ver >= 8 || IS_HASWELL(fd)) {

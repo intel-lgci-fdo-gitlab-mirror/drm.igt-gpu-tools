@@ -426,6 +426,28 @@ struct amdgpu_ip_funcs {
 		bool wr_confirm
 	);
 
+	/*
+	 * Emit PACKET3_WAIT_REG_MEM for deadlock/hang tests. Uses FUNCTION(4)
+	 * for != comparison and polls ring_context->bo_mc (initialised to 0)
+	 * for a value that never arrives, hanging the queue for reset testing.
+	 */
+	int (*wait_reg_mem_hang)(
+		const struct amdgpu_ip_funcs *func,
+		const struct amdgpu_ring_context *context,
+		uint32_t *pm4_dw
+	);
+
+	/*
+	 * Emit an invalid opcode followed by a WAIT_REG_MEM hang for priv-fault
+	 * tests: the bad opcode raises CP_BAD_OPCODE_ERROR, then the queue hangs
+	 * cleanly so the driver recovers it with a per-queue reset.
+	 */
+	int (*priv_fault_hang)(
+		const struct amdgpu_ip_funcs *func,
+		const struct amdgpu_ring_context *context,
+		uint32_t *pm4_dw
+	);
+
 };
 
 extern const struct amdgpu_ip_block_version gfx_v6_0_ip_block;

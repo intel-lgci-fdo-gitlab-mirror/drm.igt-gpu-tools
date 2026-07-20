@@ -416,21 +416,16 @@ bad_access_helper(amdgpu_device_handle device_handle, unsigned int cmd_error,
 /*
  * Emit a WAIT_REG_MEM that waits forever: poll bo_mc (initialised to 0) for a
  * value != 0. This is a valid packet that never completes, i.e. a clean hang
- * with no page fault, so it can be recovered by a per-queue reset.
+ * with no page fault, so it can be recovered by a per-queue reset. All packet
+ * creation lives in the IP block hook for ASIC portability.
  */
-static void gfx_ring_emit_wait_reg_mem_hang(struct amdgpu_ring_context *ring_context)
+static void gfx_ring_emit_wait_reg_mem_hang(
+	const struct amdgpu_ip_block_version *ip_block,
+	struct amdgpu_ring_context *ring_context)
 {
 	uint32_t i = 0;
 
-	ring_context->pm4[i++] = PACKET3(PACKET3_WAIT_REG_MEM, 5);
-	ring_context->pm4[i++] = WAIT_REG_MEM_MEM_SPACE(1)  | /* memory */
-				 WAIT_REG_MEM_FUNCTION(4)  | /* != */
-				 WAIT_REG_MEM_ENGINE(0);     /* me */
-	ring_context->pm4[i++] = lower_32_bits(ring_context->bo_mc) & 0xfffffffc;
-	ring_context->pm4[i++] = upper_32_bits(ring_context->bo_mc);
-	ring_context->pm4[i++] = 0;          /* reference value */
-	ring_context->pm4[i++] = 0xffffffff; /* and mask */
-	ring_context->pm4[i++] = 0x00000004; /* poll interval */
+	ip_block->funcs->wait_reg_mem_hang(ip_block->funcs, ring_context, &i);
 	ring_context->pm4_dw = i;
 }
 
@@ -490,7 +485,98 @@ void amdgpu_hang_ring_helper(amdgpu_device_handle device_handle, unsigned int ip
 	memset((void *)ring_context->bo_cpu, 0, ring_context->write_length * sizeof(uint32_t));
 	ring_context->resources[0] = ring_context->bo;
 
-	gfx_ring_emit_wait_reg_mem_hang(ring_context);
+	gfx_ring_emit_wait_reg_mem_hang(ip_block, ring_context);
+
+	amdgpu_test_exec_cs_helper(device_handle, ip_block->type, ring_context, 0);
+
+	amdgpu_bo_unmap_and_free(ring_context->bo, ring_context->va_handle, ring_context->bo_mc,
+				 ring_context->write_length * sizeof(uint32_t));
+	if (user_queue) {
+		ip_block->funcs->userq_destroy(device_handle, ring_context, ip_type);
+	} else {
+		free(ring_context->pm4);
+		free(ring_context);
+	}
+}
+
+/*
+ * Build a packet stream that raises a gfx priv-fault interrupt and then hangs
+ * the queue cleanly: a minimal invalid opcode (CP_BAD_OPCODE_ERROR) followed by
+ * a WAIT_REG_MEM that never completes. The bad opcode alone would let the CP
+ * run to completion (self-recovering), and a bad opcode with a mis-parseable
+ * body drags the CP into a page fault (only recoverable by a full GPU reset).
+ * Combining a minimal bad opcode with a clean wait gives the wanted case: the
+ * priv-fault interrupt fires, the queue hangs without faulting the CP, and the
+ * driver recovers it with a per-queue reset.
+ */
+static void gfx_ring_emit_priv_fault_hang(
+	const struct amdgpu_ip_block_version *ip_block,
+	struct amdgpu_ring_context *ring_context)
+{
+	uint32_t i = 0;
+
+	ip_block->funcs->priv_fault_hang(ip_block->funcs, ring_context, &i);
+	ring_context->pm4_dw = i;
+}
+
+/*
+ * Fault a user queue with an invalid opcode followed by an endless wait: the
+ * bad opcode raises the gfx priv-fault interrupt and the wait hangs the queue
+ * cleanly, so the driver recovers it with a per-queue reset (no full GPU
+ * reset). The faulting submit uses the normal (synchronised) path so it blocks
+ * until the per-queue reset completes the fence.
+ */
+void amdgpu_priv_fault_ring_helper(amdgpu_device_handle device_handle, unsigned int ip_type,
+				   struct pci_addr *pci, bool user_queue)
+{
+	const struct amdgpu_ip_block_version *ip_block;
+	const int write_length = 128;
+	const int pm4_dw = 256;
+	struct amdgpu_ring_context *ring_context;
+	int r = 0;
+
+	ip_block = get_ip_block(device_handle, ip_type);
+	ring_context = calloc(1, sizeof(*ring_context));
+	igt_assert(ring_context);
+
+	if (user_queue) {
+		ip_block->funcs->userq_create(device_handle, ring_context, ip_type);
+	} else {
+		r = amdgpu_cs_ctx_create(device_handle, &ring_context->context_handle);
+		igt_assert_eq(r, 0);
+	}
+
+	ring_context->write_length = write_length;
+	ring_context->pm4 = calloc(pm4_dw, sizeof(*ring_context->pm4));
+	ring_context->pm4_size = pm4_dw;
+	ring_context->res_cnt = 1;
+	ring_context->ring_id = 0;
+	ring_context->user_queue = user_queue;
+	igt_assert(ring_context->pm4);
+
+	r = amdgpu_bo_alloc_and_map_sync(device_handle,
+				    ring_context->write_length * sizeof(uint32_t),
+				    4096, AMDGPU_GEM_DOMAIN_GTT,
+				    AMDGPU_GEM_CREATE_CPU_GTT_USWC,
+				    AMDGPU_VM_MTYPE_UC,
+				    &ring_context->bo,
+				    (void **)&ring_context->bo_cpu,
+				    &ring_context->bo_mc,
+				    &ring_context->va_handle,
+				    ring_context->timeline_syncobj_handle,
+				    ++ring_context->point, user_queue);
+	igt_assert_eq(r, 0);
+	if (user_queue) {
+		r = amdgpu_timeline_syncobj_wait(device_handle,
+			ring_context->timeline_syncobj_handle,
+			ring_context->point);
+		igt_assert_eq(r, 0);
+	}
+
+	memset((void *)ring_context->bo_cpu, 0, ring_context->write_length * sizeof(uint32_t));
+	ring_context->resources[0] = ring_context->bo;
+
+	gfx_ring_emit_priv_fault_hang(ip_block, ring_context);
 
 	amdgpu_test_exec_cs_helper(device_handle, ip_block->type, ring_context, 0);
 

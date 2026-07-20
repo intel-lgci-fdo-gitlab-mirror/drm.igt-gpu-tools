@@ -95,6 +95,6 @@ void igt_store_word(int fd, uint64_t ahnd, const intel_ctx_t *ctx,
 	batch[++i] = MI_BATCH_BUFFER_END;
 	gem_write(fd, obj[BATCH].handle, 0, batch, sizeof(batch));
 	gem_execbuf(fd, &execbuf);
-	gem_close(fd, obj[BATCH].handle);
 	put_offset(ahnd, obj[BATCH].handle);
+	gem_close(fd, obj[BATCH].handle);
 }

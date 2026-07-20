@@ -246,6 +246,15 @@ int igt_main()
 			amdgpu_wait_memory_helper(device, AMDGPU_HW_IP_DMA, &pci, true);
 		}
 	}
+
+	igt_describe("Test-per-queue-reset-of-a-cleanly-hung-gfx-user-queue");
+	igt_subtest_with_dynamic("amdgpu-deadlock-gfx-umq") {
+		if (enable_test && userq_arr_cap[AMD_IP_GFX] &&
+			is_reset_enable(AMD_IP_GFX, AMDGPU_RESET_TYPE_PER_QUEUE, &pci)) {
+			igt_dynamic_f("amdgpu-deadlock-gfx-umq")
+			amdgpu_hang_ring_helper(device, AMDGPU_HW_IP_GFX, &pci, true);
+		}
+	}
 #endif
 
 	igt_fixture() {

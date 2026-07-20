@@ -33,5 +33,9 @@ bad_access_ring_helper(amdgpu_device_handle device_handle, unsigned int cmd_erro
 
 void
 amdgpu_hang_sdma_ring_helper(amdgpu_device_handle device_handle, uint8_t hang_type, struct pci_addr *pci);
+
+void
+amdgpu_hang_ring_helper(amdgpu_device_handle device_handle, unsigned int ip_type,
+			struct pci_addr *pci, bool user_queue);
 #endif
 

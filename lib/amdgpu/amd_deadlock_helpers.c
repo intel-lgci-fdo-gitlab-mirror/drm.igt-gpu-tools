@@ -14,6 +14,7 @@
 #include "amd_memory.h"
 #include "amd_deadlock_helpers.h"
 #include "lib/amdgpu/amd_command_submission.h"
+#include "ioctl_wrappers.h"
 
 #define MAX_JOB_COUNT 20
 
@@ -150,8 +151,8 @@ amdgpu_wait_memory(amdgpu_device_handle device_handle, unsigned int ip_type, uin
 							  WAIT_REG_MEM_ENGINE(0)/* me */));
 	}
 
-	base_cmd->emit(base_cmd, (ib_result_mc_address + MEMORY_OFFSET * 4) & 0xfffffffc);
-	base_cmd->emit(base_cmd, ((ib_result_mc_address + MEMORY_OFFSET * 4) >> 32) & 0xffffffff);
+	base_cmd->emit(base_cmd, lower_32_bits(ib_result_mc_address + MEMORY_OFFSET * 4) & 0xfffffffc);
+	base_cmd->emit(base_cmd, upper_32_bits(ib_result_mc_address + MEMORY_OFFSET * 4));
 
 	base_cmd->emit(base_cmd, 0);/* reference value */
 	base_cmd->emit(base_cmd, 0xffffffff); /* and mask */
@@ -412,6 +413,97 @@ bad_access_helper(amdgpu_device_handle device_handle, unsigned int cmd_error,
 	}
 }
 
+/*
+ * Emit a WAIT_REG_MEM that waits forever: poll bo_mc (initialised to 0) for a
+ * value != 0. This is a valid packet that never completes, i.e. a clean hang
+ * with no page fault, so it can be recovered by a per-queue reset.
+ */
+static void gfx_ring_emit_wait_reg_mem_hang(struct amdgpu_ring_context *ring_context)
+{
+	uint32_t i = 0;
+
+	ring_context->pm4[i++] = PACKET3(PACKET3_WAIT_REG_MEM, 5);
+	ring_context->pm4[i++] = WAIT_REG_MEM_MEM_SPACE(1)  | /* memory */
+				 WAIT_REG_MEM_FUNCTION(4)  | /* != */
+				 WAIT_REG_MEM_ENGINE(0);     /* me */
+	ring_context->pm4[i++] = lower_32_bits(ring_context->bo_mc) & 0xfffffffc;
+	ring_context->pm4[i++] = upper_32_bits(ring_context->bo_mc);
+	ring_context->pm4[i++] = 0;          /* reference value */
+	ring_context->pm4[i++] = 0xffffffff; /* and mask */
+	ring_context->pm4[i++] = 0x00000004; /* poll interval */
+	ring_context->pm4_dw = i;
+}
+
+/*
+ * Submit a single job that hangs the queue on a WAIT_REG_MEM (no fault) and
+ * let per-queue reset recover it. Uses the normal (synchronised) submit path
+ * so the CP actually runs the packet.
+ */
+void amdgpu_hang_ring_helper(amdgpu_device_handle device_handle, unsigned int ip_type,
+			     struct pci_addr *pci, bool user_queue)
+{
+	const struct amdgpu_ip_block_version *ip_block;
+	const int write_length = 128;
+	const int pm4_dw = 256;
+	struct amdgpu_ring_context *ring_context;
+	int r = 0;
+
+	ip_block = get_ip_block(device_handle, ip_type);
+	ring_context = calloc(1, sizeof(*ring_context));
+	igt_assert(ring_context);
+
+	if (user_queue) {
+		ip_block->funcs->userq_create(device_handle, ring_context, ip_type);
+	} else {
+		r = amdgpu_cs_ctx_create(device_handle, &ring_context->context_handle);
+		igt_assert_eq(r, 0);
+	}
+
+	ring_context->write_length = write_length;
+	ring_context->pm4 = calloc(pm4_dw, sizeof(*ring_context->pm4));
+	ring_context->pm4_size = pm4_dw;
+	ring_context->res_cnt = 1;
+	ring_context->ring_id = 0;
+	ring_context->user_queue = user_queue;
+	igt_assert(ring_context->pm4);
+
+	r = amdgpu_bo_alloc_and_map_sync(device_handle,
+				    ring_context->write_length * sizeof(uint32_t),
+				    4096, AMDGPU_GEM_DOMAIN_GTT,
+				    AMDGPU_GEM_CREATE_CPU_GTT_USWC,
+				    AMDGPU_VM_MTYPE_UC,
+				    &ring_context->bo,
+				    (void **)&ring_context->bo_cpu,
+				    &ring_context->bo_mc,
+				    &ring_context->va_handle,
+				    ring_context->timeline_syncobj_handle,
+				    ++ring_context->point, user_queue);
+	igt_assert_eq(r, 0);
+	if (user_queue) {
+		r = amdgpu_timeline_syncobj_wait(device_handle,
+			ring_context->timeline_syncobj_handle,
+			ring_context->point);
+		igt_assert_eq(r, 0);
+	}
+
+	/* the memory the queue polls stays 0, so the queue hangs */
+	memset((void *)ring_context->bo_cpu, 0, ring_context->write_length * sizeof(uint32_t));
+	ring_context->resources[0] = ring_context->bo;
+
+	gfx_ring_emit_wait_reg_mem_hang(ring_context);
+
+	amdgpu_test_exec_cs_helper(device_handle, ip_block->type, ring_context, 0);
+
+	amdgpu_bo_unmap_and_free(ring_context->bo, ring_context->va_handle, ring_context->bo_mc,
+				 ring_context->write_length * sizeof(uint32_t));
+	if (user_queue) {
+		ip_block->funcs->userq_destroy(device_handle, ring_context, ip_type);
+	} else {
+		free(ring_context->pm4);
+		free(ring_context);
+	}
+}
+
 #define MAX_DMABUF_COUNT 0x20000
 #define MAX_DWORD_COUNT 256
 
@@ -481,10 +573,10 @@ amdgpu_hang_sdma_helper(amdgpu_device_handle device_handle, uint8_t hang_type)
 			/* override  addr of buf1 and buf 2 in order to copy from buf2 to buf1 */
 			base_cmd->emit_at_offset(base_cmd, (0xffffffff & ring_context->bo_mc2), (offset - 4));
 			base_cmd->emit_at_offset(base_cmd,
-					((0xffffffff00000000 & ring_context->bo_mc2) >> 32), (offset - 3));
+					upper_32_bits(ring_context->bo_mc2), (offset - 3));
 			base_cmd->emit_at_offset(base_cmd, (0xffffffff & ring_context->bo_mc), (offset - 2));
 			base_cmd->emit_at_offset(base_cmd,
-					((0xffffffff00000000 & ring_context->bo_mc) >> 32), (offset - 1));
+					upper_32_bits(ring_context->bo_mc), (offset - 1));
 			ring_context->pm4 += ring_context->pm4_dw;
 		}
 		/* restore pm4 */

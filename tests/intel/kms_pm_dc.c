@@ -32,9 +32,11 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+
 #include "igt.h"
 #include "igt_kmod.h"
 #include "igt_psr.h"
@@ -309,14 +311,6 @@ static void assert_dc_counter_negative(data_t *data, int dc_flag, uint32_t prev_
 static void setup_videoplayback(data_t *data)
 {
 	igt_plane_t *primary;
-
-	primary = igt_output_get_plane_type(data->output,
-					    DRM_PLANE_TYPE_PRIMARY);
-	igt_require_f(igt_plane_has_format_mod(primary, data->dc3co_fb_format,
-					       DRM_FORMAT_MOD_LINEAR),
-					       "Primary plane does not support format %s\n",
-					       igt_format_str(data->dc3co_fb_format));
-
 	color_t red_green_blue[] = {
 		{ 1.0, 0.0, 0.0 },
 		{ 0.0, 1.0, 0.0 },
@@ -327,6 +321,13 @@ static void setup_videoplayback(data_t *data)
 		{ 0.0, 1.0, 0.0 },
 		{ 1.0, 0.0, 0.0 },
 	};
+
+	primary = igt_output_get_plane_type(data->output,
+					    DRM_PLANE_TYPE_PRIMARY);
+	igt_require_f(igt_plane_has_format_mod(primary, data->dc3co_fb_format,
+					       DRM_FORMAT_MOD_LINEAR),
+					       "Primary plane does not support format %s\n",
+					       igt_format_str(data->dc3co_fb_format));
 
 	create_color_fb(data, &data->fb_rgb, red_green_blue);
 	create_color_fb(data, &data->fb_rgr, red_green_red);

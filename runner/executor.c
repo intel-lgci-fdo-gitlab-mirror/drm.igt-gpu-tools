@@ -2045,6 +2045,11 @@ static bool clear_old_results(char *path)
 		return false;
 	}
 
+	if (remove_file(dirfd, "results.old")) {
+		errf("Error clearing results.old : %m\n");
+		return false;
+	}
+
 	for (i = 0; true; i++) {
 		struct stat st;
 

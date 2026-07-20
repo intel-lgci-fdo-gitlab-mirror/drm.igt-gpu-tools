@@ -23,6 +23,7 @@ enum {
 	OPT_DISK_USAGE_LIMIT,
 	OPT_TEST_LIST,
 	OPT_IGNORE_MISSING,
+	OPT_SAVE_RESULTS_AFTER_EACH_TEST,
 	OPT_PIGLIT_DMESG,
 	OPT_DMESG_WARN_LEVEL,
 	OPT_OVERALL_TIMEOUT,
@@ -309,6 +310,8 @@ static const char *usage_str =
 	"                        Set an environment variable for the test process.\n"
 	"                        If only the key is provided, the current value is read\n"
 	"                        from the runner's environment (and saved for resumes).\n"
+	"  --save-results-after-each-test\n"
+	"			 Save results.json after each test was run\n"
 	"  -L, --list-all        List all matching subtests instead of running\n"
 	"  --collect-code-cov    Enables gcov-based collect of code coverage for tests.\n"
 	"                        Requires --collect-script FILENAME\n"
@@ -693,6 +696,7 @@ bool parse_options(int argc, char **argv,
 		{"abort-on-monitored-error", optional_argument, NULL, OPT_ABORT_ON_ERROR},
 		{"disk-usage-limit", required_argument, NULL, OPT_DISK_USAGE_LIMIT},
 		{"facts", no_argument, NULL, OPT_FACTS},
+		{"save-results-after-each-test", no_argument, NULL, OPT_SAVE_RESULTS_AFTER_EACH_TEST},
 		{"kmemleak", optional_argument, NULL, OPT_KMEMLEAK},
 		{"sync", no_argument, NULL, OPT_SYNC},
 		{"log-level", required_argument, NULL, OPT_LOG_LEVEL},
@@ -767,6 +771,9 @@ bool parse_options(int argc, char **argv,
 			break;
 		case OPT_FACTS:
 			settings->facts = true;
+			break;
+		case OPT_SAVE_RESULTS_AFTER_EACH_TEST:
+			settings->save_results_after_each_test = true;
 			break;
 		case OPT_KMEMLEAK:
 			/* The default is once */
@@ -1235,6 +1242,7 @@ bool serialize_settings(struct settings *settings)
 	SERIALIZE_INT(f, settings, dry_run);
 	SERIALIZE_INT(f, settings, allow_non_root);
 	SERIALIZE_INT(f, settings, facts);
+	SERIALIZE_INT(f, settings, save_results_after_each_test);
 	SERIALIZE_INT(f, settings, kmemleak);
 	SERIALIZE_INT(f, settings, kmemleak_each);
 	SERIALIZE_INT(f, settings, sync);
@@ -1353,6 +1361,7 @@ bool read_settings_from_file(struct settings *settings, FILE *f)
 		PARSE_INT(settings, name, val, dry_run);
 		PARSE_INT(settings, name, val, allow_non_root);
 		PARSE_INT(settings, name, val, facts);
+		PARSE_INT(settings, name, val, save_results_after_each_test);
 		PARSE_INT(settings, name, val, kmemleak);
 		PARSE_INT(settings, name, val, kmemleak_each);
 		PARSE_INT(settings, name, val, sync);

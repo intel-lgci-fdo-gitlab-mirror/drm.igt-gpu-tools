@@ -62,6 +62,7 @@ struct settings {
 	struct igt_list_head env_vars;
 	struct igt_vec hook_strs;
 	bool facts;
+	bool save_results_after_each_test;
 	bool kmemleak;
 	bool kmemleak_each;
 	bool sync;

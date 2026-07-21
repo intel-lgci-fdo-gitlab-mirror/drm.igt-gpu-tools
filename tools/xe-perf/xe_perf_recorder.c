@@ -26,19 +26,28 @@
 #include <unistd.h>
 
 #include "igt_core.h"
+#include "intel_batchbuffer.h"
 #include "intel_chipset.h"
 #include "ioctl_wrappers.h"
 #include "linux_scaffold.h"
+#include "xe/xe_ioctl.h"
 #include "xe/xe_oa.h"
 #include "xe/xe_oa_data.h"
 #include "xe/xe_query.h"
 
 #include "xe_perf_recorder_commands.h"
 
-#define ALIGN(v, a) (((v) + (a)-1) & ~((a)-1))
-#define ARRAY_SIZE(arr) (sizeof(arr)/sizeof((arr)[0]))
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
+#define OAG_MMIOTRIGGER 0xdb1c
+#define OAMERT_MMIOTRIGGER 0x1453cc
+#define OAM_MMIOTRIGGER_OFFSET 0x1d0
+#define MEDIA_GT_GSI_OFFSET 0x380000
+#define XE_OAM_SAG_BASE_ADJ (MEDIA_GT_GSI_OFFSET + 0x13000)
+#define XE_OAM_SCMI_0_BASE_ADJ (MEDIA_GT_GSI_OFFSET + 0x14000)
+#define XE_OAM_SCMI_1_BASE_ADJ (MEDIA_GT_GSI_OFFSET + 0x14800)
+#define OAREPORT_REASON_MASK 0x3f
+#define OAREPORT_REASON_SHIFT 19
 
 struct circular_buffer {
 	char   *data;
@@ -354,7 +363,49 @@ struct recording_context {
 	int oa_unit_id;
 	struct drm_xe_oa_unit *oa_unit;
 	struct drm_xe_engine_class_instance *hwe;
+
+	uint32_t vm;
+	uint32_t exec_queue;
+	struct intel_bb *ibb;
 };
+
+static uint32_t oa_unit_mmio_trigger_reg(struct recording_context *ctx)
+{
+	const struct drm_xe_oa_unit *oau = ctx->oa_unit;
+
+	switch (oau->oa_unit_type) {
+	case DRM_XE_OA_UNIT_TYPE_OAM: {
+		struct drm_xe_query_oa_units *qoa = xe_oa_units(ctx->drm_fd);
+		uint8_t *poau = (uint8_t *)&qoa->oa_units[0];
+		int first_oam_id = -1;
+
+		/* Find the first OAM unit, as in oa_unit_by_type() */
+		for (int i = 0; i < qoa->num_oa_units; i++) {
+			struct drm_xe_oa_unit *u = (struct drm_xe_oa_unit *)poau;
+
+			if (u->oa_unit_type == DRM_XE_OA_UNIT_TYPE_OAM) {
+				first_oam_id = u->oa_unit_id;
+				break;
+			}
+			poau += sizeof(*u) + u->num_engines * sizeof(u->eci[0]);
+		}
+
+		assert(first_oam_id != -1);
+
+		if (oau->oa_unit_id == first_oam_id)
+			return XE_OAM_SCMI_0_BASE_ADJ + OAM_MMIOTRIGGER_OFFSET;
+		return XE_OAM_SCMI_1_BASE_ADJ + OAM_MMIOTRIGGER_OFFSET;
+	}
+	case DRM_XE_OA_UNIT_TYPE_OAM_SAG:
+		return XE_OAM_SAG_BASE_ADJ + OAM_MMIOTRIGGER_OFFSET;
+	case DRM_XE_OA_UNIT_TYPE_MERT:
+		return OAMERT_MMIOTRIGGER;
+	case DRM_XE_OA_UNIT_TYPE_OAG:
+		return OAG_MMIOTRIGGER;
+	default:
+		assert(0);
+	}
+}
 
 static void set_fd_flags(int fd, int flags)
 {
@@ -569,6 +620,28 @@ static bool write_stream_status(struct recording_context *ctx, FILE *output)
 	return true;
 }
 
+static uint32_t
+report_reason(const uint32_t *report)
+{
+	return (report[0] >> OAREPORT_REASON_SHIFT) & OAREPORT_REASON_MASK;
+}
+
+static void
+check_mmio_trigger_report(struct recording_context *ctx, const void *report)
+{
+	const struct xe_oa_format *fmt = &oa_formats[ctx->metric_set->perf_oa_format];
+	const uint32_t *report_32 = report;
+	uint64_t value;
+
+	if (report_reason(report_32))
+		return;
+
+	value = (fmt->header == HDR_64_BIT) ? ((const uint64_t *)report)[2] : report_32[2];
+
+	if (value == 0xc0ffee01 || value == 0xc0ffee02)
+		fprintf(stdout, "Received trigger report with value 0x%" PRIx64 "\n", value);
+}
+
 static bool write_stream_data(struct recording_context *ctx,
 			      char *data, ssize_t size, FILE *output)
 {
@@ -581,6 +654,8 @@ static bool write_stream_data(struct recording_context *ctx,
 			.type = INTEL_XE_PERF_RECORD_TYPE_SAMPLE,
 			.size = sizeof(header) + format_size,
 		};
+
+		check_mmio_trigger_report(ctx, data);
 
 		if (fwrite(&header, sizeof(header), 1, output) != 1)
 			return false;
@@ -699,6 +774,22 @@ write_correlation_timestamps(struct recording_context *ctx, FILE *output)
 	return write_saved_correlation_timestamps(output, &corr);
 }
 
+static void emit_mmio_triggered_report(struct intel_bb *ibb, uint32_t reg, uint32_t value)
+{
+	intel_bb_out(ibb, MI_LOAD_REGISTER_IMM(1));
+	intel_bb_out(ibb, reg);
+	intel_bb_out(ibb, value);
+}
+
+static void emit_oa_trigger(struct recording_context *ctx, uint32_t value)
+{
+	emit_mmio_triggered_report(ctx->ibb, oa_unit_mmio_trigger_reg(ctx), value);
+
+	intel_bb_flush_render(ctx->ibb);
+	intel_bb_sync(ctx->ibb);
+	intel_bb_reset(ctx->ibb, false);
+}
+
 static void
 read_command_file(struct recording_context *ctx)
 {
@@ -713,6 +804,9 @@ read_command_file(struct recording_context *ctx)
 		uint32_t len = header.size - sizeof(header), offset = 0;
 		uint8_t *dump = malloc(len);
 		FILE *file;
+
+		emit_oa_trigger(ctx, 0xc0ffee02);
+		write_perf_data(ctx->output_stream, ctx);
 
 		while (offset < len &&
 		       ((ret = read(ctx->command_fifo_fd,
@@ -837,6 +931,13 @@ usage(const char *name)
 static void
 teardown_recording_context(struct recording_context *ctx)
 {
+	if (ctx->ibb)
+		intel_bb_destroy(ctx->ibb);
+	if (ctx->exec_queue)
+		xe_exec_queue_destroy(ctx->drm_fd, ctx->exec_queue);
+	if (ctx->vm)
+		xe_vm_destroy(ctx->drm_fd, ctx->vm);
+
 	if (ctx->topology)
 		free(ctx->topology);
 
@@ -912,6 +1013,14 @@ static int assign_oa_unit(int fd, struct recording_context *ctx)
 	}
 
 	return -1;
+}
+
+static void init_mmio_trigger_ctx(struct recording_context *ctx)
+{
+	ctx->vm = xe_vm_create(ctx->drm_fd, 0, 0);
+	ctx->exec_queue = xe_exec_queue_create(ctx->drm_fd, ctx->vm, ctx->hwe, 0);
+	ctx->ibb = intel_bb_create_with_context(ctx->drm_fd, ctx->exec_queue, ctx->vm,
+						NULL, BATCH_SZ);
 }
 
 int
@@ -1182,6 +1291,9 @@ main(int argc, char *argv[])
 		goto fail;
 	}
 
+	init_mmio_trigger_ctx(&ctx);
+	emit_oa_trigger(&ctx, 0xc0ffee01);
+
 	corr_period_ns = corr_period * 1000000000ul;
 	poll_time_ns = corr_period_ns;
 
@@ -1229,6 +1341,8 @@ main(int argc, char *argv[])
 		}
 	}
 
+	/* Emit second OA trigger for the case where circular buffer is not used */
+	emit_oa_trigger(&ctx, 0xc0ffee02);
 	fprintf(stdout, "Exiting...\n");
 
 	if (!write_perf_data(ctx.output_stream, &ctx)) {

@@ -903,8 +903,12 @@ static void test_vic_mode(data_t *data, int vic, int conn_id)
 	igt_plane_set_fb(data->primary, &afb);
 	igt_display_commit_atomic(display, DRM_MODE_ATOMIC_ALLOW_MODESET, NULL);
 
-	igt_info("Press [Enter] to finish\n");
-	wait_for_keypress();
+	if (data->timeout_seconds > 0)
+		pause(); /* block until SIGALRM fires (works when detached) */
+	else {
+		igt_info("Press [Enter] to finish\n");
+		wait_for_keypress();
+	}
 
 	test_fini(data);
 }

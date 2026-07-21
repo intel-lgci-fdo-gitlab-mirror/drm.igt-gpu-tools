@@ -1002,6 +1002,7 @@ static void require_display(int xe_fd, igt_display_t *display)
 {
 	igt_require_pipe_crc(xe_fd);
 	igt_display_require(display, xe_fd);
+	igt_display_require_output(display);
 }
 
 static void dpms_on_off(int fd, drmModeResPtr res, int mode)

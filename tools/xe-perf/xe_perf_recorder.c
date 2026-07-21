@@ -587,6 +587,8 @@ static bool write_stream_data(struct recording_context *ctx,
 
 		if (fwrite(data, format_size, 1, output) != 1)
 			return false;
+
+		data += format_size;
 	}
 
 	return true;

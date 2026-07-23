@@ -550,21 +550,6 @@ static void post_healthcheck(struct hotunplug *priv)
 	cleanup(priv);
 }
 
-static void set_filter_from_device(int fd)
-{
-	const char *filter_type = "sys:";
-	char filter[strlen(filter_type) + PATH_MAX + 1];
-	char *dst = stpcpy(filter, filter_type);
-	char path[PATH_MAX + 1];
-
-	igt_assert(igt_sysfs_path(fd, path, PATH_MAX));
-	igt_ignore_warn(strncat(path, "/device", PATH_MAX - strlen(path)));
-	igt_assert(realpath(path, dst));
-
-	igt_device_filter_free_all();
-	igt_assert_eq(igt_device_filter_add(filter), 1);
-}
-
 /* Subtests */
 
 static void unbind_rebind(struct hotunplug *priv)
@@ -713,7 +698,7 @@ int igt_main()
 		}
 
 		/* Make sure subtests always reopen the same device */
-		set_filter_from_device(fd_drm);
+		igt_device_set_filter_from_fd(fd_drm);
 
 		igt_assert_eq(close_device(fd_drm, "", "selected "), -1);
 

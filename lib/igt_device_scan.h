@@ -103,4 +103,6 @@ int igt_open_render(struct igt_device_card *card);
 /* Add or use filters to match multiGPU devices */
 int igt_device_prepare_filtered_view(const char *vendor);
 
+void igt_device_set_filter_from_fd(int fd);
+
 #endif /* __IGT_DEVICE_SCAN_H__ */

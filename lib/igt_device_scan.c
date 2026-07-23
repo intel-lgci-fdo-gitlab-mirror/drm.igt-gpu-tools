@@ -2477,3 +2477,26 @@ int igt_device_prepare_filtered_view(const char *vendor)
 
 	return gpu_count;
 }
+
+/**
+ * igt_device_set_filter_from_fd:
+ * @fd: DRM device file descriptor
+ *
+ * Set device filter to the device corresponding to @fd.
+ */
+void igt_device_set_filter_from_fd(int fd)
+{
+	const char *filter_type = "sys:";
+	char filter[strlen(filter_type) + PATH_MAX + 1];
+	char *dst = stpcpy(filter, filter_type);
+	char path[PATH_MAX + 1];
+	struct stat st;
+
+	igt_assert(!fstat(fd, &st) && S_ISCHR(st.st_mode));
+	snprintf(path, sizeof(path), "/sys/dev/char/%d:%d/device",
+		 major(st.st_rdev), minor(st.st_rdev));
+	igt_assert(realpath(path, dst));
+
+	igt_device_filter_free_all();
+	igt_assert_eq(igt_device_filter_add(filter), 1);
+}

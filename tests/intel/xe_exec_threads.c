@@ -1468,6 +1468,16 @@ static void threads(int fd, int flags)
 	pthread_barrier_destroy(&barrier);
 }
 
+/*
+ * Hang subtests reset the GPU to recover, so jobs that never started are
+ * logged as "Check job timeout: ... not started". This warn is expected;
+ * whitelist it to avoid spurious dmesg-warn failures in CI.
+ */
+static void ignore_multi_queue_hang_warnings_in_dmesg(void)
+{
+	igt_emit_ignore_dmesg_regex("Check job timeout: .*not started");
+}
+
 int igt_main()
 {
 	const struct section {
@@ -1734,6 +1744,9 @@ int igt_main()
 				/* Balancer can't be set with multi-queue at the same time */
 				igt_assert(!(s->flags & BALANCER));
 			}
+
+			if ((s->flags & MULTI_QUEUE) && (s->flags & HANG))
+				ignore_multi_queue_hang_warnings_in_dmesg();
 
 			threads(fd, s->flags);
 		}

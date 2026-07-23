@@ -3537,6 +3537,13 @@ igt_plane_t *igt_crtc_get_plane_type(igt_crtc_t *crtc, int plane_type)
 		      "Valid pipe->planes idx not found. plane_idx=%d plane_type=%d n_planes=%d\n",
 		      plane_idx, plane_type, crtc->n_planes);
 
+	igt_require_f(crtc->planes[plane_idx].type == plane_type,
+		      "Unexpected plane type, found plane_idx=%d, "
+		      "type=%d != requested plane_type=%d (%s)\n", plane_idx,
+		      crtc->planes[plane_idx].type,
+		      plane_type,
+		      plane_type == DRM_PLANE_TYPE_PRIMARY ? "PRIMARY" : "CURSOR");
+
 	return &crtc->planes[plane_idx];
 }
 

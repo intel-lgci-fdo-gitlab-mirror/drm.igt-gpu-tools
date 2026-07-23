@@ -143,6 +143,10 @@ igt@kms_cursor_legacy@basic-busy-flip-before-cursor-(atomic|legacy|varying-size)
 ##########################################
 igt@kms_setmode@basic-clone-single-crtc
 ##########################################
+# Valid skip :- Same as @basic on Intel hardware
+##########################################
+igt@kms_setmode@basic-no-cpu-idle
+##########################################
 # Valid skip :- Connector uses CRTC that is incompatible
 #		with the connector
 ##########################################

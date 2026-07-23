@@ -213,3 +213,7 @@ igt@kms_flip_scaled_crc@.*linear-reflect-x
 igt@kms_pm_dc@dc3co-.*
 igt@kms_vrr@lobf-dc3co
 ##################################################################
+# Valid skip :- Same as @basic on Intel hardware
+##################################################################
+igt@kms_setmode@basic-no-cpu-idle
+##################################################################

@@ -448,6 +448,18 @@ struct amdgpu_ip_funcs {
 		uint32_t *pm4_dw
 	);
 
+	/*
+	 * Emit a privileged INDIRECT_BUFFER (PRIV bit) from an unprivileged user
+	 * queue followed by a WAIT_REG_MEM hang: this raises a priv-instruction
+	 * fault and the queue then hangs cleanly, so the driver recovers it with a
+	 * per-queue reset.
+	 */
+	int (*priv_inst_hang)(
+		const struct amdgpu_ip_funcs *func,
+		const struct amdgpu_ring_context *context,
+		uint32_t *pm4_dw
+	);
+
 };
 
 extern const struct amdgpu_ip_block_version gfx_v6_0_ip_block;

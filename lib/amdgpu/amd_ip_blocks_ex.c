@@ -224,6 +224,10 @@ static int gfx_ring_priv_fault_hang(const struct amdgpu_ip_funcs *func,
 				    const struct amdgpu_ring_context *ring_context,
 				    uint32_t *pm4_dw);
 
+static int gfx_ring_priv_inst_hang(const struct amdgpu_ip_funcs *func,
+				   const struct amdgpu_ring_context *ring_context,
+				   uint32_t *pm4_dw);
+
 void amd_ip_blocks_ex_init(struct amdgpu_ip_funcs *funcs)
 {
 	funcs->gfx_program_compute = gfx_program_compute_default;
@@ -235,6 +239,7 @@ void amd_ip_blocks_ex_init(struct amdgpu_ip_funcs *funcs)
 	/* Deadlock/hang test hooks */
 	funcs->wait_reg_mem_hang = gfx_ring_wait_reg_mem_hang;
 	funcs->priv_fault_hang = gfx_ring_priv_fault_hang;
+	funcs->priv_inst_hang = gfx_ring_priv_inst_hang;
 
 	switch (funcs->family_id) {
 	case AMDGPU_FAMILY_RV:
@@ -278,6 +283,40 @@ gfx_ring_wait_reg_mem_hang(const struct amdgpu_ip_funcs *func,
 	ring_context->pm4[i++] = (WAIT_REG_MEM_MEM_SPACE(1) | /* memory */
 				  WAIT_REG_MEM_FUNCTION(4) | /* != */
 				  WAIT_REG_MEM_ENGINE(0));   /* me */
+	ring_context->pm4[i++] = lower_32_bits(ring_context->bo_mc) & 0xfffffffc;
+	ring_context->pm4[i++] = upper_32_bits(ring_context->bo_mc);
+	ring_context->pm4[i++] = 0;          /* reference value */
+	ring_context->pm4[i++] = 0xffffffff; /* and mask */
+	ring_context->pm4[i++] = 0x00000004; /* poll interval */
+	*pm4_dw = i;
+
+	return 0;
+}
+
+/*
+ * Emit a privileged INDIRECT_BUFFER (PRIV bit set) launched from an
+ * unprivileged user queue, followed by a WAIT_REG_MEM hang. The privileged IB
+ * launch is rejected by the CP with a fault interrupt and the queue then hangs
+ * cleanly, so the driver recovers it with a per-queue reset.
+ */
+static int
+gfx_ring_priv_inst_hang(const struct amdgpu_ip_funcs *func,
+			const struct amdgpu_ring_context *ring_context,
+			uint32_t *pm4_dw)
+{
+	uint32_t i = *pm4_dw;
+
+	/* Privileged IB launch on an unprivileged UMQ -> priv-instruction fault. */
+	ring_context->pm4[i++] = PACKET3(PACKET3_INDIRECT_BUFFER, 2);
+	ring_context->pm4[i++] = lower_32_bits(ring_context->bo_mc) & 0xfffffffc;
+	ring_context->pm4[i++] = upper_32_bits(ring_context->bo_mc);
+	ring_context->pm4[i++] = 4 | (1u << 31); /* IB size (dwords) | PRIV bit */
+
+	/* Then hang cleanly on a WAIT_REG_MEM that never completes. */
+	ring_context->pm4[i++] = PACKET3(PACKET3_WAIT_REG_MEM, 5);
+	ring_context->pm4[i++] = (WAIT_REG_MEM_MEM_SPACE(1) |
+				  WAIT_REG_MEM_FUNCTION(4) |
+				  WAIT_REG_MEM_ENGINE(0));
 	ring_context->pm4[i++] = lower_32_bits(ring_context->bo_mc) & 0xfffffffc;
 	ring_context->pm4[i++] = upper_32_bits(ring_context->bo_mc);
 	ring_context->pm4[i++] = 0;          /* reference value */

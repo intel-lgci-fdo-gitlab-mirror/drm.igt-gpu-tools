@@ -55,6 +55,9 @@ static inline double g_key_file_get_double(GKeyFile *key_file,
 	const char *group_name, const char *key, GError **error) { return 0.0; }
 static inline bool g_key_file_load_from_file(GKeyFile *key_file,
 	const char *file, int flags, GError **error) { return false; }
+static inline bool g_key_file_get_boolean(GKeyFile *key_file,
+	const char *group_name, const char *key, GError **error) { return false; }
+
 
 static inline GRegex *g_regex_new(const char *pattern, int compile_options,
 	int match_options, GError **error) { return NULL; }

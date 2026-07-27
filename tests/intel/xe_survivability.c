@@ -126,8 +126,9 @@ static int find_i2c_adapter(struct pci_device *pci_xe)
 
 	igt_require(igt_kmod_load("i2c-dev", NULL) == 0);
 
-	snprintf(device_path, sizeof(device_path), "/sys/bus/pci/devices/%s/%s.%hu", bus_addr,
-		 "i2c_designware", (pci_xe->bus << 8) | (pci_xe->dev));
+	snprintf(device_path, sizeof(device_path), "/sys/bus/pci/devices/%s/%s.%d", bus_addr,
+		 "i2c_designware", (pci_xe->domain << 16 | pci_xe->bus << 8 |
+		  (pci_xe->dev << 3 | pci_xe->func)));
 	device_dir = opendir(device_path);
 
 	if (!device_dir)

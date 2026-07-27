@@ -866,8 +866,9 @@ static int find_i2c_adapter(device_t device, int sysfs_fd)
 	/* Make sure the /dev/i2c-* files exist */
 	igt_require(igt_kmod_load("i2c-dev", NULL) == 0);
 
-	snprintf(adapter, sizeof(adapter), "%s.%hu", "device/i2c_designware",
-		 (device.pci_xe->bus << 8) | (device.pci_xe->dev));
+	snprintf(adapter, sizeof(adapter), "%s.%d", "device/i2c_designware",
+		 (device.pci_xe->domain << 16 | device.pci_xe->bus << 8 |
+		  (device.pci_xe->dev << 3 | device.pci_xe->func)));
 	adapter_fd = openat(sysfs_fd, adapter, O_RDONLY);
 	igt_require_fd(adapter_fd);
 

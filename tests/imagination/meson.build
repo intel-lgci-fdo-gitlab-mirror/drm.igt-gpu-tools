@@ -1,5 +1,6 @@
 pvr_progs = [ 'pvr_dev_query',
 	      'pvr_gem',
+	      'pvr_gpu_info',
 	    ]
 
 pvr_deps = test_deps

@@ -133,3 +133,33 @@ igt_pvr_get_heap_info(int fd, uint32_t *array_len_out)
 
 	return heaps;
 }
+
+/**
+ * igt_pvr_get_static_data_areas:
+ * @fd: The file descriptor of the DRM device.
+ * @array_len_out: Pointer to store the number of static data areas.
+ *
+ * Function to get information about the device static data areas.
+ *
+ * Returns: An array of drm_pvr_static_data_area structures. The caller is responsible
+ * for freeing the array.
+ */
+struct drm_pvr_static_data_area *
+igt_pvr_get_static_data_areas(int fd, uint32_t *array_len_out)
+{
+	struct drm_pvr_static_data_area *sdas =
+		calloc(DRM_PVR_STATIC_DATA_AREA_YUV_CSC + 1, sizeof(*sdas));
+	struct drm_pvr_dev_query_static_data_areas sdas_get = {
+		.static_data_areas =
+			DRM_PVR_OBJ_ARRAY(DRM_PVR_STATIC_DATA_AREA_YUV_CSC + 1,
+					  sdas),
+	};
+
+	igt_pvr_ioctl_dev_query(fd, DRM_PVR_DEV_QUERY_STATIC_DATA_AREAS_GET,
+				sizeof(sdas_get), &sdas_get, 0);
+
+	if (array_len_out)
+		*array_len_out = sdas_get.static_data_areas.count;
+
+	return sdas;
+}

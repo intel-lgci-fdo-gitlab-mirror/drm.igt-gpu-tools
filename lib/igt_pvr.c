@@ -102,3 +102,34 @@ igt_pvr_ioctl_dev_query(int fd, enum drm_pvr_dev_query type, uint64_t size,
 
 	return args;
 }
+
+/**
+ * igt_pvr_get_heap_info:
+ * @fd: The file descriptor of the DRM device.
+ * @array_len_out: Pointer to store the number of heaps.
+ *
+ * Function to get information about the device heaps.
+ *
+ * Returns: An array of drm_pvr_heap structures. The caller is responsible
+ * for freeing the array.
+ */
+struct drm_pvr_heap *
+igt_pvr_get_heap_info(int fd, uint32_t *array_len_out)
+{
+	struct drm_pvr_heap *heaps =
+		calloc(DRM_PVR_HEAP_COUNT, sizeof(*heaps));
+	struct drm_pvr_dev_query_heap_info heap_info_get = {
+		.heaps = DRM_PVR_OBJ_ARRAY(DRM_PVR_HEAP_COUNT, heaps),
+	};
+
+	if (!heaps)
+		return NULL;
+
+	igt_pvr_ioctl_dev_query(fd, DRM_PVR_DEV_QUERY_HEAP_INFO_GET,
+				sizeof(heap_info_get), &heap_info_get, 0);
+
+	if (array_len_out)
+		*array_len_out = heap_info_get.heaps.count;
+
+	return heaps;
+}

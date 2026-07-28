@@ -1,7 +1,9 @@
 pvr_progs = [ 'pvr_dev_query',
+	      'pvr_free_list',
 	      'pvr_gem',
 	      'pvr_gpu_info',
 	      'pvr_heap_info',
+	      'pvr_hwrt',
 	      'pvr_vm_context',
 	    ]
 

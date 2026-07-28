@@ -1,4 +1,5 @@
-pvr_progs = [ 'pvr_gem',
+pvr_progs = [ 'pvr_dev_query',
+	      'pvr_gem',
 	    ]
 
 pvr_deps = test_deps

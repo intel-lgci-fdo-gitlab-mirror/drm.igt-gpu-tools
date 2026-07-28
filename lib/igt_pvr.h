@@ -13,4 +13,8 @@
 uint32_t igt_pvr_ioctl_create_bo(int fd, size_t *size);
 off_t igt_pvr_ioctl_get_bo_mmap_offset(int fd, uint32_t handle);
 
+struct drm_pvr_ioctl_dev_query_args
+igt_pvr_ioctl_dev_query(int fd, enum drm_pvr_dev_query type, uint64_t size,
+			void *pointer, int expect_err);
+
 #endif /* IGT_PVR_H */

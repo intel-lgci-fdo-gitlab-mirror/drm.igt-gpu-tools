@@ -47,7 +47,6 @@ uint32_t igt_pvr_ioctl_create_bo(int fd, size_t *size)
 	return arg.handle;
 }
 
-
 /**
  * igt_pvr_ioctl_get_bo_mmap_offset:
  * @fd: The file descriptor of the DRM device.
@@ -72,4 +71,34 @@ off_t igt_pvr_ioctl_get_bo_mmap_offset(int fd, uint32_t handle)
 	igt_assert(arg.offset <= PTRDIFF_MAX);
 
 	return (off_t)arg.offset;
+}
+
+/**
+ * igt_pvr_ioctl_dev_query:
+ * @fd: The file descriptor of the DRM device.
+ * @type: The type of the device query.
+ * @size: The size of the query structure.
+ * @pointer: Pointer to the query structure.
+ * @expect_err: Expected error code, or 0 if no error is expected.
+ *
+ * Function to perform a device query.
+ *
+ * Returns: The filled-in query arguments structure.
+ */
+struct drm_pvr_ioctl_dev_query_args
+igt_pvr_ioctl_dev_query(int fd, enum drm_pvr_dev_query type, uint64_t size,
+			void *pointer, int expect_err)
+{
+	struct drm_pvr_ioctl_dev_query_args args = {
+		.type = type,
+		.size = size,
+		.pointer = to_user_pointer(pointer),
+	};
+
+	if (expect_err)
+		do_ioctl_err(fd, DRM_IOCTL_PVR_DEV_QUERY, &args, expect_err);
+	else
+		do_ioctl(fd, DRM_IOCTL_PVR_DEV_QUERY, &args);
+
+	return args;
 }

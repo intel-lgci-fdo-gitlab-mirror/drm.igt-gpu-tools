@@ -20,6 +20,7 @@
  *   concurrent-mmap-and-evict    - mmap/munmap while VRAM eviction runs
  *   concurrent-userptr-and-reset - USERPTR invalidation during reset
  *   stress-all-paths             - Combined stress of all paths
+ *   notifier-reclaim-splat       - userptr + MADV_PAGEOUT (Michael Gavrilov)
  */
 
 #include <errno.h>
@@ -42,8 +43,12 @@
 #define STRESS_ITERATIONS 100
 #define THREAD_RUNTIME_SEC 2
 
+/* For notifier-reclaim-splat test */
+#define USERPTR_BUF_SIZE (64ull * 1024 * 1024) /* 64 MiB */
+#define PAGEOUT_ITERATIONS 8
+
 /* kmsg patterns that indicate lockdep violations */
-static const char *lockdep_violation_patterns[] = {
+static const char * const lockdep_violation_patterns[] = {
 	"circular locking dependency",
 	"possible recursive locking detected",
 	"inconsistent lock state",
@@ -55,7 +60,7 @@ static const char *lockdep_violation_patterns[] = {
 struct thread_data {
 	amdgpu_device_handle device;
 	int fd;
-	volatile bool stop;
+	bool stop;
 	int iterations;
 };
 
@@ -252,6 +257,7 @@ static void *reset_thread(void *arg)
 
 	while (!data->stop) {
 		FILE *f = fopen(path, "w");
+
 		if (f) {
 			fprintf(f, "1");
 			fclose(f);
@@ -478,6 +484,122 @@ static void test_stress_all_paths(int fd, amdgpu_device_handle device)
 	close(kmsg_fd);
 }
 
+/* For notifier-reclaim-splat test */
+
+/*
+ * test_notifier_reclaim_splat - Michael Gavrilov reproducer
+ *
+ * Triggers the false positive lockdep splat by:
+ * 1. Creating anonymous memory buffer (64MB)
+ * 2. Registering it as AMDGPU userptr (installs MMU notifier)
+ * 3. Forcing memory reclaim with madvise(MADV_PAGEOUT)
+ * 4. Reclaim path calls MMU notifier which takes notifier_lock under fs_reclaim
+ * 5. Lockdep sees circular dependency with the false edge from amdgpu_lockdep_init
+ *
+ * Expected behavior:
+ * - BEFORE kernel fix: lockdep splat in dmesg (test FAILS)
+ * - AFTER kernel fix: no lockdep splat (test PASSES)
+ */
+static void test_notifier_reclaim_splat(int fd)
+{
+	void *buf;
+	struct drm_amdgpu_gem_userptr userptr = {0};
+	int ret;
+	int kmsg_fd;
+	bool violation_found = false;
+	unsigned long taints = 0;
+
+	igt_info("Creating %llu MiB anonymous buffer\n", USERPTR_BUF_SIZE / (1024 * 1024));
+
+	buf = mmap(NULL, USERPTR_BUF_SIZE, PROT_READ | PROT_WRITE,
+			 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	igt_assert(buf != MAP_FAILED);
+
+	/* Fault all pages in */
+	igt_info("Faulting in all pages\n");
+	memset(buf, 0xa5, USERPTR_BUF_SIZE);
+
+	/* Open kmsg to monitor for lockdep violations */
+	kmsg_fd = kmsg_open();
+	igt_assert(kmsg_fd >= 0);
+
+	/* Register as userptr - this installs MMU notifier callback */
+	igt_info("Registering as userptr BO - installs MMU notifier\n");
+	userptr.addr = (uint64_t)(uintptr_t)buf;
+	userptr.size = USERPTR_BUF_SIZE;
+	userptr.flags = AMDGPU_GEM_USERPTR_ANONONLY |
+			 AMDGPU_GEM_USERPTR_REGISTER |   /* Install mmu_interval_notifier */
+			 AMDGPU_GEM_USERPTR_VALIDATE;
+
+	ret = igt_ioctl(fd, DRM_IOCTL_AMDGPU_GEM_USERPTR, &userptr);
+	igt_assert_eq(ret, 0);
+
+	igt_info("Forcing reclaim with MADV_PAGEOUT - triggers MMU notifier under fs_reclaim\n");
+
+	/* Force reclaim - this triggers the lockdep splat on vulnerable kernel */
+	for (int i = 0; i < PAGEOUT_ITERATIONS; i++) {
+		igt_info("  Iteration %d/%d: madvise MADV_PAGEOUT\n", i + 1, PAGEOUT_ITERATIONS);
+
+		ret = madvise(buf, USERPTR_BUF_SIZE, MADV_PAGEOUT);
+		igt_assert_eq(ret, 0);
+
+		usleep(50000);  /* 50ms - give kernel time to process */
+
+		/* Check for lockdep violations */
+		if (kmsg_has_lockdep_violation(kmsg_fd)) {
+			violation_found = true;
+			igt_warn("LOCKDEP VIOLATION DETECTED during iteration %d\n", i + 1);
+			break;
+		}
+
+		/* Re-fault pages for next iteration */
+		memset(buf, 0xa5, USERPTR_BUF_SIZE);
+	}
+
+	close(kmsg_fd);
+
+	if (violation_found) {
+		igt_info("\n");
+		igt_info("================================================================\n");
+		igt_info("LOCKDEP SPLAT DETECTED - This is EXPECTED before kernel fix\n");
+		igt_info("================================================================\n");
+		igt_info("\n");
+		igt_info("The kernel has a FALSE POSITIVE lockdep bug:\n");
+		igt_info("  File: drivers/gpu/drm/amd/amdgpu/amdgpu_lockdep.c\n");
+		igt_info("  Function: amdgpu_lockdep_init() around line 176\n");
+		igt_info("  Problem: fs_reclaim_acquire called while holding notifier_lock\n");
+		igt_info("\n");
+		igt_info("This teaches lockdep a FALSE edge: notifier_lock -> fs_reclaim\n");
+		igt_info("Runtime reality: fs_reclaim -> notifier_lock (opposite direction)\n");
+		igt_info("\n");
+		igt_info("FIX: Move fs_reclaim_acquire to BEFORE all mutex acquisitions\n");
+		igt_info("\n");
+		igt_info("================================================================\n");
+		igt_info("\n");
+	} else {
+		igt_info("\n");
+		igt_info("================================================================\n");
+		igt_info("NO LOCKDEP VIOLATION - Kernel fix appears to be working!\n");
+		igt_info("================================================================\n");
+		igt_info("\n");
+	}
+
+	/* Cleanup */
+	{
+		struct drm_gem_close gem_close = { .handle = userptr.handle };
+		int ret_close;
+
+		ret_close = igt_ioctl(fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
+		igt_assert_eq(ret_close, 0);
+	}
+	munmap(buf, USERPTR_BUF_SIZE);
+
+	/* Check kernel taint flags */
+	igt_kernel_tainted(&taints);
+	igt_assert_f(!(taints & (1ul << TAINT_WARN)),
+			 "Kernel is tainted - lockdep violation detected\n");
+}
+
 int igt_main()
 {
 	amdgpu_device_handle device;
@@ -522,6 +644,10 @@ int igt_main()
 		test_stress_all_paths(fd, device);
 	}
 
+	igt_describe("Michael Gavrilov reproducer: userptr + MADV_PAGEOUT triggers fs_reclaim cycle");
+	igt_subtest("notifier-reclaim-splat") {
+		test_notifier_reclaim_splat(fd);
+	}
 	igt_fixture() {
 		amdgpu_device_deinitialize(device);
 		drm_close_driver(fd);

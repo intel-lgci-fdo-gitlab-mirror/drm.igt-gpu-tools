@@ -163,3 +163,46 @@ igt_pvr_get_static_data_areas(int fd, uint32_t *array_len_out)
 
 	return sdas;
 }
+
+/**
+ * igt_pvr_ioctl_create_vm_context:
+ * @fd: The file descriptor of the DRM device.
+ * @expect_err: Expected error code, or 0 if no error is expected.
+ *
+ * Function to create a VM context.
+ *
+ * Returns: The handle of the created VM context.
+ */
+uint32_t igt_pvr_ioctl_create_vm_context(int fd, int expect_err)
+{
+	struct drm_pvr_ioctl_create_vm_context_args args = {0};
+
+	if (expect_err)
+		do_ioctl_err(fd, DRM_IOCTL_PVR_CREATE_VM_CONTEXT, &args,
+			     expect_err);
+	else
+		do_ioctl(fd, DRM_IOCTL_PVR_CREATE_VM_CONTEXT, &args);
+
+	return args.handle;
+}
+
+/**
+ * igt_pvr_ioctl_destroy_vm_context:
+ * @fd: The file descriptor of the DRM device.
+ * @handle: The handle of the VM context to destroy.
+ * @expect_err: Expected error code, or 0 if no error is expected.
+ *
+ * Function to destroy a VM context.
+ */
+void igt_pvr_ioctl_destroy_vm_context(int fd, uint32_t handle, int expect_err)
+{
+	struct drm_pvr_ioctl_destroy_vm_context_args args = {
+		.handle = handle,
+	};
+
+	if (expect_err)
+		do_ioctl_err(fd, DRM_IOCTL_PVR_DESTROY_VM_CONTEXT, &args,
+			     expect_err);
+	else
+		do_ioctl(fd, DRM_IOCTL_PVR_DESTROY_VM_CONTEXT, &args);
+}

@@ -21,4 +21,7 @@ igt_pvr_get_heap_info(int fd, uint32_t *array_len_out);
 struct drm_pvr_static_data_area *
 igt_pvr_get_static_data_areas(int fd, uint32_t *array_len_out);
 
+uint32_t igt_pvr_ioctl_create_vm_context(int fd, int expect_err);
+void igt_pvr_ioctl_destroy_vm_context(int fd, uint32_t handle, int expect_err);
+
 #endif /* IGT_PVR_H */

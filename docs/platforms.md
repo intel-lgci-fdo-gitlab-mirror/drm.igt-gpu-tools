@@ -25,6 +25,7 @@ Support exists for the following platforms:
 - Panthor
 - Virtual GPUs (e.g., virtio_gpu in QEMU/KVM/AVD or vmwgfx)
 - Virtual display (vkms)
+- Imagination (powervr)
 
 #### Intel
 

@@ -561,3 +561,5 @@ if not meson.is_cross_build()
 endif
 
 subdir('intel-ci')
+
+subdir('imagination')

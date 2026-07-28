@@ -59,6 +59,7 @@ int __get_drm_device_name(int fd, char *name, int name_size);
 #define DRIVER_VIRTIO	(1 << 10)
 #define DRIVER_PANTHOR	(1 << 11)
 #define DRIVER_ASAHI	(1 << 12)
+#define DRIVER_POWERVR	(1 << 13)
 
 /*
  * Exclude DRIVER_VGEM and DRIVER_VIRTIO from DRIVER_ANY since if you run
@@ -137,6 +138,7 @@ int drm_prepare_filtered_multigpu(int chipset);
 int drm_open_filtered_card(int idx);
 
 void igt_require_amdgpu(int fd);
+void igt_require_imagination(int fd);
 void igt_require_intel(int fd);
 void igt_require_i915(int fd);
 void igt_require_nouveau(int fd);
@@ -150,6 +152,7 @@ bool is_i915_device(int fd);
 bool is_mtk_device(int fd);
 bool is_msm_device(int fd);
 bool is_nouveau_device(int fd);
+bool is_pvr_device(int fd);
 bool is_vc4_device(int fd);
 bool is_xe_device(int fd);
 bool is_intel_device(int fd);

@@ -143,6 +143,11 @@ bool is_msm_device(int fd)
 	return __is_device(fd, "msm");
 }
 
+bool is_pvr_device(int fd)
+{
+	return __is_device(fd, "powervr");
+}
+
 bool is_nouveau_device(int fd)
 {
 	/* Currently all nouveau-specific codepaths require libdrm */
@@ -227,6 +232,7 @@ static const struct module {
 	{ DRIVER_MSM, "msm" },
 	{ DRIVER_PANFROST, "panfrost" },
 	{ DRIVER_PANTHOR, "panthor" },
+	{ DRIVER_POWERVR, "powervr" },
 	{ DRIVER_V3D, "v3d" },
 	{ DRIVER_VC4, "vc4" },
 	{ DRIVER_VGEM, "vgem" },
@@ -986,6 +992,11 @@ int drm_open_filtered_card(int idx)
 void igt_require_amdgpu(int fd)
 {
 	igt_require(is_amdgpu_device(fd));
+}
+
+void igt_require_imagination(int fd)
+{
+	igt_require(is_pvr_device(fd));
 }
 
 void igt_require_intel(int fd)

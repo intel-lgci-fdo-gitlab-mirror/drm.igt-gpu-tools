@@ -287,6 +287,7 @@ asahidir = join_paths(libexecdir, 'asahi')
 msmdir = join_paths(libexecdir, 'msm')
 panfrostdir = join_paths(libexecdir, 'panfrost')
 panthordir = join_paths(libexecdir, 'panthor')
+pvrdir = join_paths(libexecdir, 'imagination')
 unigrafdir = join_paths(libexecdir, 'unigraf')
 v3ddir = join_paths(libexecdir, 'v3d')
 vc4dir = join_paths(libexecdir, 'vc4')
@@ -353,6 +354,12 @@ if get_option('use_rpath')
 	endforeach
 	panthor_rpathdir = join_paths(panthor_rpathdir, libdir)
 
+	pvrdir_rpathdir = '$ORIGIN'
+	foreach p : pvrdir.split('/')
+		pvrdir_rpathdir = join_paths(pvrdir_rpathdir, '..')
+	endforeach
+	pvrdir_rpathdir = join_paths(pvrdir_rpathdir, libdir)
+
 	v3d_rpathdir = '$ORIGIN'
 	foreach p : v3ddir.split('/')
 		v3d_rpathdir = join_paths(v3d_rpathdir, '..')
@@ -390,6 +397,7 @@ else
 	msm_rpathdir = ''
 	panfrost_rpathdir = ''
 	panthor_rpathdir = ''
+	pvrdir_rpathdir = ''
 	v3d_rpathdir = ''
 	vc4_rpathdir = ''
 	vkms_rpathdir = ''

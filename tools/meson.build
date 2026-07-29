@@ -19,7 +19,6 @@ tools_progs = [
 	'intel_display_crc',
 	'intel_display_poller',
 	'intel_framebuffer_dump',
-	'intel_guc_logger',
 	'intel_hdcp',
 	'intel_infoframes',
 	'intel_opregion_decode',
@@ -109,6 +108,11 @@ executable('intel_audio_dump', 'intel_audio_dump.c',
 
 executable('intel_forcewaked', 'intel_forcewaked.c',
 	   dependencies : [lib_igt_reg_tools, pciaccess, libdrm],
+	   install_rpath : bindir_rpathdir,
+	   install : true)
+
+executable('intel_guc_logger', 'intel_guc_logger.c',
+	   dependencies : [lib_igt_tools_stub, libdrm, pthreads],
 	   install_rpath : bindir_rpathdir,
 	   install : true)
 

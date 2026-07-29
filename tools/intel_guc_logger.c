@@ -38,9 +38,12 @@
 #include <sys/syscall.h>
 #include <sys/mman.h>
 #include <assert.h>
+#include <getopt.h>
 #include <pthread.h>
 
-#include "igt.h"
+#include "drmtest.h"
+#include "igt_core.h"
+#include "igt_debugfs.h"
 
 #define MB(x) ((uint64_t)(x) * 1024 * 1024)
 #ifndef PAGE_SIZE
@@ -367,6 +370,8 @@ static int parse_options(int opt, int opt_index, void *data)
 		discard_oldlogs = true;
 		igt_debug("old/boot-time logs will be discarded\n");
 		break;
+	default:
+		exit(1);
 	}
 
 	return 0;
@@ -382,10 +387,12 @@ static void process_command_line(int argc, char **argv)
 		{"polltimeout", required_argument, 0, 'p'},
 		{"size", required_argument, 0, 's'},
 		{"discard", no_argument, 0, 'd'},
+		{"help", no_argument, 0, 'h'},
 		{ 0, 0, 0, 0 }
 	};
 
 	const char *help =
+		"Usage: intel_guc_logger [options]\n"
 		"  -v --verbosity=level   verbosity level of GuC logging (0-3)\n"
 		"  -o --outputfile=name   name of the output file, including the location, where logs will be stored\n"
 		"  -b --buffers=num       number of buffers to be maintained on logger side for storing logs\n"
@@ -394,8 +401,16 @@ static void process_command_line(int argc, char **argv)
 		"  -s --size=MB           max size of output file in MBs after which logging will be stopped\n"
 		"  -d --discard           discard the old/boot-time logs before entering into the capture loop\n";
 
-	igt_simple_init_parse_opts(&argc, argv, "v:o:b:t:p:s:d", long_options,
-				   help, parse_options, NULL);
+	int opt, opt_index = 0;
+
+	while ((opt = getopt_long(argc, argv, "v:o:b:t:p:s:dh",
+				  long_options, &opt_index)) != -1) {
+		if (opt == 'h') {
+			printf("%s", help);
+			exit(0);
+		}
+		parse_options(opt, opt_index, NULL);
+	}
 }
 
 int main(int argc, char **argv)

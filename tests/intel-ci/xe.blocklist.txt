@@ -9,6 +9,7 @@ igt@msm.*
 igt@nouveau_.*
 igt@panfrost.*
 igt@panthor.*
+igt@pvr.*
 igt@v3d.*
 igt@vc4.*
 igt@vgem_.*

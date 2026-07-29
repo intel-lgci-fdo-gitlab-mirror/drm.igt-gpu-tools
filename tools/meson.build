@@ -21,7 +21,6 @@ tools_progs = [
 	'intel_framebuffer_dump',
 	'intel_hdcp',
 	'intel_opregion_decode',
-	'intel_panel_fitter',
 	'intel_perf_counters',
 	'intel_pm_rpm',
 	'intel_reg_checker',
@@ -116,6 +115,11 @@ executable('intel_guc_logger', 'intel_guc_logger.c',
 	   install : true)
 
 executable('intel_infoframes', 'intel_infoframes.c',
+	   dependencies : [lib_igt_reg_tools, pciaccess, libdrm],
+	   install_rpath : bindir_rpathdir,
+	   install : true)
+
+executable('intel_panel_fitter', 'intel_panel_fitter.c',
 	   dependencies : [lib_igt_reg_tools, pciaccess, libdrm],
 	   install_rpath : bindir_rpathdir,
 	   install : true)

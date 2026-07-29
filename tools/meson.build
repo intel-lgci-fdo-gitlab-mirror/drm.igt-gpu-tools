@@ -14,7 +14,6 @@ endforeach
 tools_progs = [
 	'igt_facts',
 	'igt_power',
-	'igt_stats',
 	'intel_audio_dump',
 	'intel_backlight',
 	'intel_bios_dumper',
@@ -57,6 +56,11 @@ foreach prog : tools_progs
 		   install_rpath : bindir_rpathdir,
 		   install : true)
 endforeach
+
+executable('igt_stats', 'igt_stats.c',
+	   dependencies : [lib_igt_stats, lib_igt_tools_stub, math],
+	   install_rpath : bindir_rpathdir,
+	   install : true)
 
 if libudev.found()
 	intel_dp_compliance_src = [

@@ -412,6 +412,15 @@ lib_igt_tools_stub_build = static_library('igt_tools_stub',
 lib_igt_tools_stub = declare_dependency(link_with : lib_igt_tools_stub_build,
 					include_directories : inc)
 
+lib_igt_drm_stub_build = static_library('igt_drm_stub',
+	['igt_drm_stub.c'],
+	dependencies : [libdrm, pciaccess],
+	include_directories : inc)
+
+lib_igt_drm_stub = declare_dependency(link_with : lib_igt_drm_stub_build,
+				      dependencies : [libdrm, pciaccess],
+				      include_directories : inc)
+
 scan_dep = [
 	glib,
 	libpci,

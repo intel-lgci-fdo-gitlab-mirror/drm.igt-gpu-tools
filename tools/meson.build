@@ -25,7 +25,6 @@ tools_progs = [
 	'intel_forcewaked',
 	'intel_framebuffer_dump',
 	'intel_gpu_time',
-	'intel_gtt',
 	'intel_guc_logger',
 	'intel_hdcp',
 	'intel_infoframes',
@@ -70,6 +69,12 @@ executable('intel_gpu_frequency', 'intel_gpu_frequency.c',
 	   install : true)
 
 executable('intel_stepping', 'intel_stepping.c',
+	   dependencies : [lib_igt_chipset, lib_igt_tools_stub, lib_igt_drm_stub,
+	                    pciaccess, libdrm],
+	   install_rpath : bindir_rpathdir,
+	   install : true)
+
+executable('intel_gtt', 'intel_gtt.c',
 	   dependencies : [lib_igt_chipset, lib_igt_tools_stub, lib_igt_drm_stub,
 	                    pciaccess, libdrm],
 	   install_rpath : bindir_rpathdir,

@@ -423,22 +423,24 @@ lib_igt_drm_stub = declare_dependency(link_with : lib_igt_drm_stub_build,
 
 scan_dep = [
 	glib,
+	libdrm,
 	libpci,
 	libudev,
+	pciaccess,
 ]
 
 lib_igt_device_scan_build = static_library('igt_device_scan',
 	['igt_device_scan.c',
 	'igt_list.c',
 	'igt_map.c',
-	'igt_tools_stub.c',
 	'intel_device_info.c',
 	'intel_cmds_info.c',
 	],
-	dependencies : scan_dep,
+	dependencies : [scan_dep, lib_igt_drm_stub, lib_igt_tools_stub],
 	include_directories : inc)
 
 lib_igt_device_scan = declare_dependency(link_with : lib_igt_device_scan_build,
+				  dependencies : [libdrm, pciaccess],
 				  include_directories : inc)
 
 lib_igt_drm_clients_build = static_library('igt_drm_clients',

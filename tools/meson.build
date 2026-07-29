@@ -21,7 +21,6 @@ tools_progs = [
 	'intel_display_poller',
 	'intel_forcewaked',
 	'intel_framebuffer_dump',
-	'intel_gpu_time',
 	'intel_guc_logger',
 	'intel_hdcp',
 	'intel_infoframes',
@@ -96,6 +95,11 @@ executable('intel_backlight', 'intel_backlight.c',
 	   install : true)
 
 executable('intel_lid', 'intel_lid.c',
+	   dependencies : [lib_igt_reg_tools, pciaccess, libdrm],
+	   install_rpath : bindir_rpathdir,
+	   install : true)
+
+executable('intel_gpu_time', 'intel_gpu_time.c',
 	   dependencies : [lib_igt_reg_tools, pciaccess, libdrm],
 	   install_rpath : bindir_rpathdir,
 	   install : true)

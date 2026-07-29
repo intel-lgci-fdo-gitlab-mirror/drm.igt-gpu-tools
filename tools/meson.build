@@ -17,7 +17,6 @@ tools_progs = [
 	'intel_bios_dumper',
 	'intel_display_bandwidth',
 	'intel_display_crc',
-	'intel_display_poller',
 	'intel_framebuffer_dump',
 	'intel_hdcp',
 	'intel_opregion_decode',
@@ -124,6 +123,11 @@ executable('intel_panel_fitter', 'intel_panel_fitter.c',
 	   install : true)
 
 executable('intel_watermark', 'intel_watermark.c',
+	   dependencies : [lib_igt_reg_tools, pciaccess, libdrm],
+	   install_rpath : bindir_rpathdir,
+	   install : true)
+
+executable('intel_display_poller', 'intel_display_poller.c',
 	   dependencies : [lib_igt_reg_tools, pciaccess, libdrm],
 	   install_rpath : bindir_rpathdir,
 	   install : true)

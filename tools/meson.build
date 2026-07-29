@@ -23,7 +23,6 @@ tools_progs = [
 	'intel_dump_decode',
 	'intel_error_decode',
 	'intel_forcewaked',
-	'intel_gpu_frequency',
 	'intel_framebuffer_dump',
 	'intel_gpu_time',
 	'intel_gtt',
@@ -63,6 +62,11 @@ executable('igt_stats', 'igt_stats.c',
 
 executable('intel_firmware_decode', 'intel_firmware_decode.c',
 	   dependencies : [lib_igt_tools_stub],
+	   install_rpath : bindir_rpathdir,
+	   install : true)
+
+executable('intel_gpu_frequency', 'intel_gpu_frequency.c',
+	   dependencies : [lib_igt_chipset, lib_igt_tools_stub, lib_igt_drm_stub],
 	   install_rpath : bindir_rpathdir,
 	   install : true)
 

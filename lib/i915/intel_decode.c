@@ -28,8 +28,9 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
+#include <xf86drm.h>
 
-#include "igt.h"
+#include "intel_chipset.h"
 #include "intel_decode.h"
 
 /* Struct for tracking intel_decode state. */

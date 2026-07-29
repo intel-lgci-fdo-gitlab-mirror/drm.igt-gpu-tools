@@ -26,7 +26,6 @@ tools_progs = [
 	'intel_reg_checker',
 	'intel_residency',
 	'intel_tiling_detect',
-	'intel_watermark',
 	'intel_gem_info',
 	'intel_gvtg_test',
 	'dpcd_reg',
@@ -120,6 +119,11 @@ executable('intel_infoframes', 'intel_infoframes.c',
 	   install : true)
 
 executable('intel_panel_fitter', 'intel_panel_fitter.c',
+	   dependencies : [lib_igt_reg_tools, pciaccess, libdrm],
+	   install_rpath : bindir_rpathdir,
+	   install : true)
+
+executable('intel_watermark', 'intel_watermark.c',
 	   dependencies : [lib_igt_reg_tools, pciaccess, libdrm],
 	   install_rpath : bindir_rpathdir,
 	   install : true)

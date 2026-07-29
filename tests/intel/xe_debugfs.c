@@ -16,6 +16,18 @@ struct {
 	bool warn_on_not_hit;
 } opt = { 0 };
 
+struct uc_info_node {
+	const char *node;
+	bool mandatory;
+};
+
+static const struct uc_info_node uc_info_nodes[] = {
+	{ "uc/gsc_info", false },
+	{ "uc/huc_info", false },
+	{ "uc/guc_info", true },
+	{ "uc/guc_pc",   true },
+};
+
 /**
  * TEST: Xe debugfs test
  * Description: Xe-specific debugfs tests. These are complementary to the
@@ -595,6 +607,56 @@ static void check_gt_reg_sr(int fd, int gt)
 	igt_assert_eq(problems, 0);
 }
 
+/**
+ * SUBTEST: uc-info-read
+ * Description: This is for reading the uc device nodes.
+ */
+static void test_uc_info_read(struct xe_device *xe_dev, unsigned int gt)
+{
+	int debugfs_fd = igt_debugfs_gt_dir(xe_dev->fd, gt);
+	int i;
+	int fail_count = 0;
+
+	igt_skip_on_f(debugfs_fd < 0, "Failed to open debugfs directory\n");
+
+	for (i = 0; i < ARRAY_SIZE(uc_info_nodes); i++) {
+		const char *node = uc_info_nodes[i].node;
+		bool mandatory = uc_info_nodes[i].mandatory;
+		char *buf;
+
+		if (!igt_sysfs_has_attr(debugfs_fd, node)) {
+			if (mandatory)
+				fail_count++;
+			igt_info("%s debugfs node not present on GT-%u\n", node, gt);
+			continue;
+		}
+		buf = igt_sysfs_get(debugfs_fd, node);
+		if (!buf) {
+			if (mandatory)
+				fail_count++;
+
+			igt_info("Failed to read %s %s debugfs file on GT-%u\n",
+				 mandatory ? "mandatory" : "optional", node, gt);
+			continue;
+		}
+
+		if (buf[0] == '\0') {
+			free(buf);
+			if (mandatory)
+				fail_count++;
+			igt_info("%s %s debugfs file is empty on GT-%u\n",
+				 mandatory ? "mandatory" : "optional", node, gt);
+			continue;
+		}
+		igt_info("GT-%u: successfully read %s (%zu bytes)\n", gt, node, strlen(buf));
+		free(buf);
+	}
+	close(debugfs_fd);
+	igt_fail_on_f(fail_count > 0,
+		      "%d mandatory debugfs node(s) failed (missing/unreadable/empty) on GT-%u\n",
+		      fail_count, gt);
+}
+
 const char *help_str =
 	"  --warn-not-hit|--w\tWarn about devfs nodes that have no tests";
 
@@ -619,8 +681,9 @@ static int opt_handler(int option, int option_index, void *input)
 int igt_main_args("", long_options, help_str, opt_handler, NULL)
 {
 	struct xe_device *xe_dev;
+	int fd = -1;
+	unsigned int gt;
 	unsigned int t;
-	int fd = -1, gt;
 
 	igt_fixture() {
 		fd = drm_open_driver_master(DRIVER_XE);
@@ -647,6 +710,12 @@ int igt_main_args("", long_options, help_str, opt_handler, NULL)
 		xe_for_each_gt(fd, gt)
 			igt_dynamic_f("gt%d", gt)
 				check_gt_reg_sr(fd, gt);
+
+	igt_describe("Verify that uC debugfs info nodes are present and readable.");
+	igt_subtest_with_dynamic("uc-info-read")
+		xe_for_each_gt(fd, gt)
+			igt_dynamic_f("gt%d", gt)
+				test_uc_info_read(xe_dev, gt);
 
 	igt_fixture() {
 		drm_close_driver(fd);

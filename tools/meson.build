@@ -15,7 +15,6 @@ tools_progs = [
 	'igt_facts',
 	'igt_power',
 	'intel_audio_dump',
-	'intel_backlight',
 	'intel_bios_dumper',
 	'intel_display_bandwidth',
 	'intel_display_crc',
@@ -89,6 +88,11 @@ executable('intel_error_decode', 'intel_error_decode.c',
 
 executable('intel_vbt_decode', 'intel_vbt_decode.c',
 	   dependencies : [lib_igt_chipset, lib_igt_halffloat, lib_igt_tools_stub, pciaccess, libdrm, math],
+	   install_rpath : bindir_rpathdir,
+	   install : true)
+
+executable('intel_backlight', 'intel_backlight.c',
+	   dependencies : [lib_igt_reg_tools, pciaccess, libdrm],
 	   install_rpath : bindir_rpathdir,
 	   install : true)
 

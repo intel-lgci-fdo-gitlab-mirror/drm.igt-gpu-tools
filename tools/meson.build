@@ -36,7 +36,6 @@ tools_progs = [
 	'intel_pm_rpm',
 	'intel_reg_checker',
 	'intel_residency',
-	'intel_stepping',
 	'intel_tiling_detect',
 	'intel_vbt_decode',
 	'intel_watermark',
@@ -67,6 +66,12 @@ executable('intel_firmware_decode', 'intel_firmware_decode.c',
 
 executable('intel_gpu_frequency', 'intel_gpu_frequency.c',
 	   dependencies : [lib_igt_chipset, lib_igt_tools_stub, lib_igt_drm_stub],
+	   install_rpath : bindir_rpathdir,
+	   install : true)
+
+executable('intel_stepping', 'intel_stepping.c',
+	   dependencies : [lib_igt_chipset, lib_igt_tools_stub, lib_igt_drm_stub,
+	                    pciaccess, libdrm],
 	   install_rpath : bindir_rpathdir,
 	   install : true)
 

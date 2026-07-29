@@ -26,7 +26,6 @@ tools_progs = [
 	'intel_residency',
 	'intel_tiling_detect',
 	'intel_gem_info',
-	'intel_gvtg_test',
 	'dpcd_reg',
 	'lsgpu',
 ]
@@ -129,6 +128,11 @@ executable('intel_watermark', 'intel_watermark.c',
 
 executable('intel_display_poller', 'intel_display_poller.c',
 	   dependencies : [lib_igt_reg_tools, pciaccess, libdrm],
+	   install_rpath : bindir_rpathdir,
+	   install : true)
+
+executable('intel_gvtg_test', 'intel_gvtg_test.c',
+	   dependencies : [lib_igt_tools_stub, pciaccess, libdrm, math],
 	   install_rpath : bindir_rpathdir,
 	   install : true)
 

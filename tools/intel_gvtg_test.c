@@ -30,7 +30,7 @@
  */
 #include "config.h"
 
-#include "igt.h"
+#include "igt_core.h"
 #include <errno.h>
 #include <getopt.h>
 #include <math.h>

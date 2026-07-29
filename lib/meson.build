@@ -453,6 +453,13 @@ lib_igt_profiling_build = static_library('igt_profiling',
 lib_igt_profiling = declare_dependency(link_with : lib_igt_profiling_build,
 				        include_directories : inc)
 
+lib_igt_stats_build = static_library('igt_stats_tools',
+	['igt_stats.c'],
+	include_directories : inc)
+
+lib_igt_stats = declare_dependency(link_with : lib_igt_stats_build,
+				   include_directories : inc)
+
 i915_perf_files = [
   'igt_list.c',
   'i915/perf.c',

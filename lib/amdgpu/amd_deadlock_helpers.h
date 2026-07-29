@@ -43,6 +43,10 @@ amdgpu_priv_fault_ring_helper(amdgpu_device_handle device_handle, unsigned int i
 			      struct pci_addr *pci, bool user_queue);
 
 void
+amdgpu_priv_fault_badcount_ring_helper(amdgpu_device_handle device_handle, unsigned int ip_type,
+				       struct pci_addr *pci, bool user_queue);
+
+void
 amdgpu_priv_inst_ring_helper(amdgpu_device_handle device_handle, unsigned int ip_type,
 			     struct pci_addr *pci, bool user_queue);
 #endif

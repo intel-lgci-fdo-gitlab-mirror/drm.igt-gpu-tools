@@ -265,6 +265,15 @@ int igt_main()
 		}
 	}
 
+	igt_describe("Test-gfx-user-queue-bad-opcode-with-nonzero-count-recovers-via-gfx-pipe-reset");
+	igt_subtest_with_dynamic("amdgpu-gfx-priv-fault-badcount-umq") {
+		if (enable_test && userq_arr_cap[AMD_IP_GFX] &&
+			is_reset_enable(AMD_IP_GFX, AMDGPU_RESET_TYPE_PER_QUEUE, &pci)) {
+			igt_dynamic_f("amdgpu-gfx-priv-fault-badcount-umq")
+			amdgpu_priv_fault_badcount_ring_helper(device, AMDGPU_HW_IP_GFX, &pci, true);
+		}
+	}
+
 	igt_describe("Test-per-queue-reset-recovery-of-a-gfx-user-queue-privileged-instruction-fault");
 	igt_subtest_with_dynamic("amdgpu-gfx-priv-inst-umq") {
 		if (enable_test && userq_arr_cap[AMD_IP_GFX] &&

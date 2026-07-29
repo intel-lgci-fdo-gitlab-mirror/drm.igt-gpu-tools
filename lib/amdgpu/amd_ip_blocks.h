@@ -460,6 +460,17 @@ struct amdgpu_ip_funcs {
 		uint32_t *pm4_dw
 	);
 
+	/*
+	 * Emit a bad opcode with a non-zero count field and no body: the pipe HW
+	 * cannot find the packet end and stalls mid-packet, so a per-queue (vmid)
+	 * reset cannot recover it -- only a gfx pipe reset can.
+	 */
+	int (*priv_fault_badcount_hang)(
+		const struct amdgpu_ip_funcs *func,
+		const struct amdgpu_ring_context *context,
+		uint32_t *pm4_dw
+	);
+
 };
 
 extern const struct amdgpu_ip_block_version gfx_v6_0_ip_block;

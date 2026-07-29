@@ -471,6 +471,14 @@ lib_igt_stats_build = static_library('igt_stats_tools',
 lib_igt_stats = declare_dependency(link_with : lib_igt_stats_build,
 				   include_directories : inc)
 
+lib_igt_halffloat_build = static_library('igt_halffloat',
+	['igt_halffloat.c'],
+	include_directories : inc)
+
+lib_igt_halffloat = declare_dependency(link_with : lib_igt_halffloat_build,
+				       dependencies : [math],
+				       include_directories : inc)
+
 i915_perf_files = [
   'igt_list.c',
   'i915/perf.c',

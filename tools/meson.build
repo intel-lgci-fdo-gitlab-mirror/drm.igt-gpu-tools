@@ -25,7 +25,6 @@ tools_progs = [
 	'intel_guc_logger',
 	'intel_hdcp',
 	'intel_infoframes',
-	'intel_lid',
 	'intel_opregion_decode',
 	'intel_panel_fitter',
 	'intel_perf_counters',
@@ -92,6 +91,11 @@ executable('intel_vbt_decode', 'intel_vbt_decode.c',
 	   install : true)
 
 executable('intel_backlight', 'intel_backlight.c',
+	   dependencies : [lib_igt_reg_tools, pciaccess, libdrm],
+	   install_rpath : bindir_rpathdir,
+	   install : true)
+
+executable('intel_lid', 'intel_lid.c',
 	   dependencies : [lib_igt_reg_tools, pciaccess, libdrm],
 	   install_rpath : bindir_rpathdir,
 	   install : true)

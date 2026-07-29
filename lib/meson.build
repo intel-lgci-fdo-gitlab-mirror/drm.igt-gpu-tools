@@ -479,6 +479,20 @@ lib_igt_halffloat = declare_dependency(link_with : lib_igt_halffloat_build,
 				       dependencies : [math],
 				       include_directories : inc)
 
+lib_i915_decode_build = static_library('i915_decode',
+	['i915/intel_decode.c',
+	 'instdone.c',
+	],
+	dependencies : [lib_igt_chipset],
+	include_directories : inc)
+
+lib_i915_decode = declare_dependency(link_with : lib_i915_decode_build,
+				     dependencies : [lib_igt_chipset,
+				                     lib_igt_tools_stub,
+				                     lib_igt_drm_stub,
+				                     pciaccess],
+				     include_directories : inc)
+
 i915_perf_files = [
   'igt_list.c',
   'i915/perf.c',

@@ -493,6 +493,21 @@ lib_i915_decode = declare_dependency(link_with : lib_i915_decode_build,
 				                     pciaccess],
 				     include_directories : inc)
 
+lib_igt_reg_tools_build = static_library('igt_reg_tools',
+	['intel_mmio.c',
+	 'intel_reg_map.c',
+	 'intel_iosf.c',
+	],
+	dependencies : [pciaccess, libdrm],
+	include_directories : inc)
+
+lib_igt_reg_tools = declare_dependency(link_with : lib_igt_reg_tools_build,
+				       dependencies : [lib_igt_chipset,
+				                       lib_igt_tools_stub,
+				                       lib_igt_drm_stub,
+				                       pciaccess, libdrm],
+				       include_directories : inc)
+
 i915_perf_files = [
   'igt_list.c',
   'i915/perf.c',

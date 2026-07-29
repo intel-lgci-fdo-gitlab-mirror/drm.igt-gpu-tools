@@ -34,7 +34,6 @@ tools_progs = [
 	'intel_reg_checker',
 	'intel_residency',
 	'intel_tiling_detect',
-	'intel_vbt_decode',
 	'intel_watermark',
 	'intel_gem_info',
 	'intel_gvtg_test',
@@ -85,6 +84,11 @@ executable('intel_dump_decode', 'intel_dump_decode.c',
 
 executable('intel_error_decode', 'intel_error_decode.c',
 	   dependencies : [lib_i915_decode, pciaccess, zlib, libdrm],
+	   install_rpath : bindir_rpathdir,
+	   install : true)
+
+executable('intel_vbt_decode', 'intel_vbt_decode.c',
+	   dependencies : [lib_igt_chipset, lib_igt_halffloat, lib_igt_tools_stub, pciaccess, libdrm, math],
 	   install_rpath : bindir_rpathdir,
 	   install : true)
 

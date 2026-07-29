@@ -20,7 +20,6 @@ tools_progs = [
 	'intel_display_bandwidth',
 	'intel_display_crc',
 	'intel_display_poller',
-	'intel_dump_decode',
 	'intel_error_decode',
 	'intel_forcewaked',
 	'intel_framebuffer_dump',
@@ -77,6 +76,11 @@ executable('intel_stepping', 'intel_stepping.c',
 executable('intel_gtt', 'intel_gtt.c',
 	   dependencies : [lib_igt_chipset, lib_igt_tools_stub, lib_igt_drm_stub,
 	                    pciaccess, libdrm],
+	   install_rpath : bindir_rpathdir,
+	   install : true)
+
+executable('intel_dump_decode', 'intel_dump_decode.c',
+	   dependencies : [lib_i915_decode],
 	   install_rpath : bindir_rpathdir,
 	   install : true)
 

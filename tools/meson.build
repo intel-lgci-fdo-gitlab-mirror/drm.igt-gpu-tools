@@ -14,7 +14,6 @@ endforeach
 tools_progs = [
 	'igt_facts',
 	'igt_power',
-	'intel_audio_dump',
 	'intel_bios_dumper',
 	'intel_display_bandwidth',
 	'intel_display_crc',
@@ -100,6 +99,11 @@ executable('intel_lid', 'intel_lid.c',
 	   install : true)
 
 executable('intel_gpu_time', 'intel_gpu_time.c',
+	   dependencies : [lib_igt_reg_tools, pciaccess, libdrm],
+	   install_rpath : bindir_rpathdir,
+	   install : true)
+
+executable('intel_audio_dump', 'intel_audio_dump.c',
 	   dependencies : [lib_igt_reg_tools, pciaccess, libdrm],
 	   install_rpath : bindir_rpathdir,
 	   install : true)

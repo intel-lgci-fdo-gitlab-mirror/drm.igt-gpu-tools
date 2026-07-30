@@ -214,6 +214,7 @@ static void test_cursor_pos(data_t *data, int x, int y, unsigned int flags)
 	cr = igt_get_cairo_ctx(rgb_fb->fd, rgb_fb);
 
 	igt_plane_set_fb(data->primary, rgb_fb);
+	igt_plane_set_position(data->primary, 0, 0);
 	igt_display_commit2(&data->display, COMMIT_ATOMIC);
 
 	igt_paint_color(cr, 0, 0, rgb_fb->width, rgb_fb->height, 0.0, 0.0, 0.0);

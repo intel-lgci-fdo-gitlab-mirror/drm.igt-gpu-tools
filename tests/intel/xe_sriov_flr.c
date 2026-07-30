@@ -709,6 +709,16 @@ static bool check_pte_gpa(int pf_fd, xe_ggtt_pte_t pte, uint8_t expected)
 	return (xe_ggtt_pte_get_gpa(pf_fd, pte) == expected);
 }
 
+static bool check_pte_vfid(int pf_fd, xe_ggtt_pte_t pte, uint8_t expected)
+{
+	return (xe_ggtt_pte_get_vfid(pf_fd, pte) == expected);
+}
+
+static bool check_pte_valid(int pf_fd, xe_ggtt_pte_t pte)
+{
+	return (pte & GGTT_PAGE_PRESENT);
+}
+
 static int populate_ggtt_pte_offsets(struct ggtt_data *gdata)
 {
 	int ret, pf_fd = gdata->base.pf_fd, num_vfs = gdata->base.num_vfs;
@@ -825,6 +835,17 @@ static void ggtt_subcheck_verify_vf(int vf_id, int flr_vf_id, struct subcheck_da
 
 		if (!check_pte_gpa(pf_fd, pte, (vf_id == flr_vf_id) ? 0 : vf_id)) {
 			igt_debug("Wrong GGTT GPA on VF%u after VF%u FLR\n", vf_id, flr_vf_id);
+			failed = true;
+		}
+
+		if (!check_pte_vfid(pf_fd, pte, vf_id)) {
+			igt_debug("Wrong GGTT VFID on VF%u after VF%u FLR\n", vf_id, flr_vf_id);
+			failed = true;
+		}
+
+		if (!check_pte_valid(pf_fd, pte)) {
+			igt_debug("GGTT page present bit not set on VF%u after VF%u FLR\n",
+				  vf_id, flr_vf_id);
 			failed = true;
 		}
 

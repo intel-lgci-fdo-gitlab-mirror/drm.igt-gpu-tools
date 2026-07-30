@@ -12,10 +12,19 @@
 #define TGL_GGTT_PTE_ADDR_MASK		GENMASK_ULL(38, 12)
 #define   GGTT_PTE_ADDR_SHIFT		12
 
+#define GGTT_PTE_VFID_MASK		GENMASK_ULL(11, 2)
+#define TGL_GGTT_PTE_VFID_MASK		GENMASK_ULL(4, 2)
+#define   GGTT_PTE_VFID_SHIFT		2
+
+#define GGTT_PAGE_PRESENT		GENMASK_ULL(0, 0)
+
 typedef uint64_t xe_ggtt_pte_t;
 typedef uint64_t xe_ggtt_pte_mask_t;
 
+xe_ggtt_pte_mask_t xe_ggtt_get_vfid_mask(int pf_fd);
 xe_ggtt_pte_mask_t xe_ggtt_get_gpa_mask(int pf_fd);
+
+uint8_t xe_ggtt_pte_get_vfid(int pf_fd, xe_ggtt_pte_t pte);
 uint64_t xe_ggtt_pte_get_gpa(int pf_fd, xe_ggtt_pte_t pte);
 
 #endif /* __XE_GGTT_H__ */

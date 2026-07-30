@@ -70,11 +70,11 @@
  *
  * SUBTEST: vrr
  * Description: Make sure that we have at least one VRR-capable panel.
- * Mega feature: VRR
+ * Mega feature: Adaptive Sync
  *
  * SUBTEST: dsc
  * Description: Make sure that we have at least one DSC-capable sink.
- * Mega feature: DSC
+ * Mega feature: VDSC
  *
  * arg[1].values: 1, 2, 3, 4
  */

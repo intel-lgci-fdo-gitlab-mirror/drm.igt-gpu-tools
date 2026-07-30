@@ -5,14 +5,13 @@
 
 #include "lib/intel_io.h"
 #include "lib/igt_sizes.h"
+#include "lib/xe/xe_ggtt.h"
 
 #ifndef XE_MMIO_H
 #define XE_MMIO_H
 
 #define TILE_MMIO_SIZE		SZ_16M
 #define GGTT_OFFSET_IN_TILE	SZ_8M
-
-typedef uint64_t xe_ggtt_pte_t;
 
 struct xe_mmio {
 	int fd;

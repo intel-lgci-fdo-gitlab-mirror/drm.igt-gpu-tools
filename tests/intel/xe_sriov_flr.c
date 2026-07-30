@@ -16,6 +16,7 @@
 #include "intel_chipset.h"
 #include "intel_vram.h"
 #include "linux_scaffold.h"
+#include "xe/xe_ggtt.h"
 #include "xe/xe_mmio.h"
 #include "xe/xe_query.h"
 #include "xe/xe_sriov_provisioning.h"
@@ -646,8 +647,6 @@ static int execute_parallel_flr_twice(int pf_fd, int num_vfs,
 }
 
 #define GEN12_VF_CAP_REG			0x1901f8
-#define GGTT_PTE_TEST_FIELD_MASK		GENMASK_ULL(19, 12)
-#define GGTT_PTE_ADDR_SHIFT			12
 
 struct ggtt_ops {
 	void (*set_pte)(struct xe_mmio *mmio, uint8_t tile, uint32_t pte_offset, xe_ggtt_pte_t pte);
@@ -693,26 +692,21 @@ static void intel_mtl_set_pte(struct xe_mmio *mmio, uint8_t tile,
 static bool set_pte_gpa(struct ggtt_ops *ggtt, struct xe_mmio *mmio, uint8_t tile,
 			uint32_t pte_offset, uint8_t gpa, xe_ggtt_pte_t *out)
 {
+	xe_ggtt_pte_mask_t mask = xe_ggtt_get_gpa_mask(mmio->fd);
 	xe_ggtt_pte_t pte;
 
 	pte = ggtt->get_pte(mmio, tile, pte_offset);
-	pte &= ~GGTT_PTE_TEST_FIELD_MASK;
-	pte |= ((xe_ggtt_pte_t)gpa << GGTT_PTE_ADDR_SHIFT) & GGTT_PTE_TEST_FIELD_MASK;
+	pte &= ~mask;
+	pte |= ((xe_ggtt_pte_t)gpa << GGTT_PTE_ADDR_SHIFT) & mask;
 	ggtt->set_pte(mmio, tile, pte_offset, pte);
 	*out = ggtt->get_pte(mmio, tile, pte_offset);
 
 	return *out == pte;
 }
 
-static bool check_pte_gpa(struct ggtt_ops *ggtt, struct xe_mmio *mmio, uint8_t tile,
-			  uint32_t pte_offset, uint8_t expected_gpa, xe_ggtt_pte_t *out)
+static bool check_pte_gpa(int pf_fd, xe_ggtt_pte_t pte, uint8_t expected)
 {
-	uint8_t val;
-
-	*out = ggtt->get_pte(mmio, tile, pte_offset);
-	val = (uint8_t)((*out & GGTT_PTE_TEST_FIELD_MASK) >> GGTT_PTE_ADDR_SHIFT);
-
-	return val == expected_gpa;
+	return (xe_ggtt_pte_get_gpa(pf_fd, pte) == expected);
 }
 
 static int populate_ggtt_pte_offsets(struct ggtt_data *gdata)
@@ -817,17 +811,24 @@ static void ggtt_subcheck_prepare_vf(int vf_id, struct subcheck_data *data)
 static void ggtt_subcheck_verify_vf(int vf_id, int flr_vf_id, struct subcheck_data *data)
 {
 	struct ggtt_data *gdata = (struct ggtt_data *)data;
-	uint8_t expected = (vf_id == flr_vf_id) ? 0 : vf_id;
 	struct xe_mmio *mmio = xe_mmio_for_vf(0);
+	int pf_fd = gdata->base.pf_fd;
 	xe_ggtt_pte_t pte;
 	uint32_t pte_offset;
+	bool failed = false;
 
 	if (data->stop_reason)
 		return;
 
 	for_each_pte_offset(pte_offset, &gdata->pte_offsets[vf_id]) {
-		if (!check_pte_gpa(&gdata->ggtt, mmio, data->tile, pte_offset,
-				   expected, &pte)) {
+		pte = gdata->ggtt.get_pte(mmio, data->tile, pte_offset);
+
+		if (!check_pte_gpa(pf_fd, pte, (vf_id == flr_vf_id) ? 0 : vf_id)) {
+			igt_debug("Wrong GGTT GPA on VF%u after VF%u FLR\n", vf_id, flr_vf_id);
+			failed = true;
+		}
+
+		if (failed) {
 			set_fail_reason(data,
 					"GGTT check after VF%u FLR failed on VF%u: Read PTE: %#" PRIx64 " at offset: %#x\n",
 					flr_vf_id, vf_id, pte, pte_offset);

@@ -2676,7 +2676,7 @@ static void xe_w_step_sync_and_verify(struct w_step *w)
 
 	if (!w->duration.unbound) {
 		igt_assert(w->duration.requested_ticks && w->xe.data->spin.ticks_delta);
-		igt_assert_lte(w->duration.requested_ticks, ~w->xe.data->spin.ticks_delta);
+		igt_assert_lte(w->duration.requested_ticks, w->xe.data->spin.ticks_delta);
 	}
 }
 

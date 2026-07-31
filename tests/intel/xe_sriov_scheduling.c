@@ -189,7 +189,7 @@ static void subm_exec_slot(struct subm *s, unsigned int slot)
 
 static bool subm_is_work_complete(struct subm *s, unsigned int slot)
 {
-	return s->expected_ticks <= ~s->spin[slot]->ticks_delta;
+	return s->expected_ticks <= s->spin[slot]->ticks_delta;
 }
 
 static bool subm_is_exec_queue_banned(struct subm *s)

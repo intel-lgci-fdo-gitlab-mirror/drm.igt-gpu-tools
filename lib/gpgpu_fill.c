@@ -282,9 +282,15 @@ __gen9_gpgpu_fillfunc(int i915,
 	intel_bb_destroy(ibb);
 }
 
-static struct gpgpu_shader *__xehp_gpgpu_kernel(int fd)
+static struct gpgpu_shader *__xehp_gpgpu_kernel(int fd, struct intel_buf *buf)
 {
 	struct gpgpu_shader *kernel = gpgpu_shader_create(fd);
+	uint64_t offset;
+
+	if (is_xe_device(fd))
+		offset = xe_canonical_va(fd, buf->addr.offset);
+	else
+		offset = CANONICAL(buf->addr.offset);
 
 	emit_iga64_code(kernel, gpgpu_fill, R"(
 // fill up r1 with target colour
@@ -313,7 +319,7 @@ mov (1|M0)		r4.4<1>:ud	r0.5<0;1,0>:ud
 //	[18:14]		MessageType: 0xA (media block write)
 //	[7:0]		BTI: 0
 send.dc1 (16|M0)	null	r4	src1_null	0x0	0x40A8000
-#else
+#elif GFX_VER < 3000
 // load block offsets into message header payload
 mov (2|M0)		r4.5<1>:ud	r2.0<2;2,1>:ud
 // load block width
@@ -327,8 +333,37 @@ mov (1|M0)		 r4.14<1>:w	0xF:w
 //	[19:17]		Caching: 0  (use state settings for both L1 and L3)
 //	[5:0]		Opcode: 0x07  (store_block2d)
 send.tgm (16|M0)	null	r4	null	0x0	0x64000007
+#else
+// load A64 base surface state offset into address payload
+mov (1|M0)		r4.0<1>:ud	ARG(0):ud
+mov (1|M0)		r4.1<1>:ud	ARG(1):ud
+// load surface width
+mov (1|M0)		r4.2<1>:ud	ARG(2):ud
+// load surface height
+mov (1|M0)		r4.3<1>:ud	ARG(3):ud
+// load surface pitch
+mov (1|M0)		r4.4<1>:ud	ARG(4):ud
+// load block offsets
+mov (2|M0)		r4.5<1>:ud	r2.0<2;2,1>:ud
+// load block width
+mov (1|M0)		r4.14<1>:w	0xF:w
+// Untyped 2D block store
+// Message Descriptor
+//	bspec:63981
+//	0x2020007:
+//	[30:29]		AddrType: 0 (Flat)
+//	[28:25]		Mlen: 1 address register written
+//	[24:20]		Rlen: 0 registers read back
+//	[19:17]		Caching: 1  (L1 uncached, L3 uncached)
+//	[15]		DataOrder: 0  non-transposed
+//	[11:9]		DataSize: 0  (8b per data element)
+//	[5:0]		Opcode: 0x07  (store_block2d)
+send.ugm (1|M0)		null	r4	r5:1	0x0	0x2020007
 #endif
-	)");
+	)", offset & 0xffffffff, offset >> 32,
+	intel_buf_width(buf) * buf->bpp/8 - 1, intel_buf_height(buf) - 1,
+	buf->surface[0].stride - 1);
+
 	gpgpu_shader__eot(kernel);
 	return kernel;
 }
@@ -422,7 +457,7 @@ void xehp_gpgpu_fillfunc(int fd,
 
 	intel_bb_ptr_set(ibb, BATCH_STATE_SPLIT);
 
-	kernel = __xehp_gpgpu_kernel(fd);
+	kernel = __xehp_gpgpu_kernel(fd, buf);
 	xehp_fill_interface_descriptor(ibb, buf, kernel->instr,
 				       kernel->size * 4, &idd);
 	gpgpu_shader_destroy(kernel);

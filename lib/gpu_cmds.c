@@ -1021,7 +1021,7 @@ xehp_emit_cfe_state(struct intel_bb *ibb, uint32_t threads)
 
 #define _LEGACY_MODE (1 << 6)
 	/* number of threads & urb entries */
-	intel_bb_out(ibb, (max_t(threads, threads, 64) - 1) << 16 | (dfeud ? _LEGACY_MODE : 0));
+	intel_bb_out(ibb, (max_t(threads, threads, 128) - 1) << 16 | (dfeud ? _LEGACY_MODE : 0));
 
 	intel_bb_out(ibb, 0);
 	intel_bb_out(ibb, 0);

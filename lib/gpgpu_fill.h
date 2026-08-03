@@ -62,7 +62,7 @@ void gen12_gpgpu_fillfunc(int i915,
 			  uint8_t color);
 
 void
-xehp_gpgpu_fillfunc(int i915,
+xehp_gpgpu_fillfunc(int fd,
 		    struct intel_buf *dst,
 		    unsigned int x, unsigned int y,
 		    unsigned int width, unsigned int height,

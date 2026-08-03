@@ -282,9 +282,9 @@ __gen9_gpgpu_fillfunc(int i915,
 	intel_bb_destroy(ibb);
 }
 
-static struct gpgpu_shader *__xehp_gpgpu_kernel(int i915)
+static struct gpgpu_shader *__xehp_gpgpu_kernel(int fd)
 {
-	struct gpgpu_shader *kernel = gpgpu_shader_create(i915);
+	struct gpgpu_shader *kernel = gpgpu_shader_create(fd);
 
 	emit_iga64_code(kernel, gpgpu_fill, R"(
 // fill up r1 with target colour
@@ -407,7 +407,7 @@ static struct gpgpu_shader *__xe3p_gpgpu_kernel(int xe)
 	return kernel;
 }
 
-void xehp_gpgpu_fillfunc(int i915,
+void xehp_gpgpu_fillfunc(int fd,
 			 struct intel_buf *buf,
 			 unsigned int x, unsigned int y,
 			 unsigned int width, unsigned int height,
@@ -417,12 +417,12 @@ void xehp_gpgpu_fillfunc(int i915,
 	struct gpgpu_shader *kernel;
 	struct xehp_interface_descriptor_data idd;
 
-	ibb = intel_bb_create(i915, PAGE_SIZE);
+	ibb = intel_bb_create(fd, PAGE_SIZE);
 	intel_bb_add_intel_buf(ibb, buf, true);
 
 	intel_bb_ptr_set(ibb, BATCH_STATE_SPLIT);
 
-	kernel = __xehp_gpgpu_kernel(i915);
+	kernel = __xehp_gpgpu_kernel(fd);
 	xehp_fill_interface_descriptor(ibb, buf, kernel->instr,
 				       kernel->size * 4, &idd);
 	gpgpu_shader_destroy(kernel);

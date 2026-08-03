@@ -2814,8 +2814,18 @@ int igt_main()
 				 * and migrates the first half. On platforms with
 				 * 64K VRAM granularity (e.g. PVC), each half
 				 * must be >= 64K, so use SZ_128K as bo_size.
+				 *
+				 * MADVISE_MULTI_VMA applies madvise on
+				 * data+bo_size/2 for bo_size/2 bytes, and
+				 * PREFETCH_SAME_ATTR applies madvise on data
+				 * for bo_size/2 bytes after a full-buffer
+				 * prefetch.  Both create a bo_size/2 VMA
+				 * fragment; on NEED64K platforms that fragment
+				 * must be >= 64K, so use SZ_128K for them too.
 				 */
-				size_t bo_size = (s->flags & PREFETCH_SPLIT_VMA) ?
+				size_t bo_size = (s->flags & (PREFETCH_SPLIT_VMA |
+							      MADVISE_MULTI_VMA |
+							      PREFETCH_SAME_ATTR)) ?
 						 SZ_128K : SZ_64K;
 
 				test_exec(fd, hwe, 1, 1, bo_size, 0, 0, NULL,

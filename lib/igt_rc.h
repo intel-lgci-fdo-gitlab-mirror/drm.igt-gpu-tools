@@ -33,4 +33,6 @@
 
 extern GKeyFile *igt_key_file;
 
+struct _GKeyFile *igt_load_igtrc(void);
+
 #endif /* IGT_RC_H */

@@ -36,6 +36,7 @@
 #include "igt_aux.h"
 #include "igt_core.h"
 #include "igt_facts.h"
+#include "igt_rc.h"
 #include "igt_taints.h"
 #include "igt_vec.h"
 #include "executor.h"

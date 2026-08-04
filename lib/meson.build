@@ -37,6 +37,7 @@ lib_sources = [
 	'igt_os.c',
 	'igt_params.c',
 	'igt_perf.c',
+	'igt_rc.c',
 	'igt_pipe_crc.c',
 	'igt_power.c',
 	'igt_primes.c',
@@ -436,8 +437,9 @@ lib_igt_device_scan_build = static_library('igt_device_scan',
 	'igt_map.c',
 	'intel_device_info.c',
 	'intel_cmds_info.c',
+	'igt_rc.c',
 	],
-	dependencies : [scan_dep, lib_igt_drm_stub, lib_igt_tools_stub],
+	dependencies : [scan_dep, lib_igt_drm_stub, lib_igt_tools_stub, glib],
 	include_directories : inc)
 
 lib_igt_device_scan = declare_dependency(link_with : lib_igt_device_scan_build,

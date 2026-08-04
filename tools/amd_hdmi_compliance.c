@@ -913,7 +913,91 @@ static void test_vic_mode(data_t *data, int vic, int conn_id)
 	test_fini(data);
 }
 
-const char *optstr = "hvt:i:b:y:e:";
+/*
+ * Toggle HDMI content type (No Data <-> Game) on a live pipe to exercise HDMI
+ * ALLM (HF1-56 steps 14/15) without tearing down the link.
+ *
+ * A full atomic modeset is performed once, then each toggle is first attempted
+ * as a property-only atomic commit (no DRM_MODE_ATOMIC_ALLOW_MODESET). If the
+ * kernel rejects it, the change is retried with ALLOW_MODESET. The path taken
+ * is reported:
+ *   [seamless, no modeset] -> ALLM toggled in-band, link stays up
+ *   [MODESET required]     -> content-type change blanks/retrains the link
+ */
+static void test_allm_toggle(data_t *data, int conn_id)
+{
+	igt_display_t *display = &data->display;
+	drmModeModeInfo *mode;
+	uint32_t connector_id, prop_id;
+	uint64_t cur_ct = 0;
+	igt_fb_t afb;
+	char line[16];
+	int game = 0;
+
+	test_init(data, conn_id);
+
+	connector_id = data->output->config.connector->connector_id;
+	igt_require_f(kmstest_get_property(data->fd, connector_id,
+					   DRM_MODE_OBJECT_CONNECTOR,
+					   "content type", &prop_id, &cur_ct,
+					   NULL),
+		      "connector has no 'content type' property\n");
+
+	/* Initial full atomic modeset with a test pattern. */
+	mode = igt_output_get_mode(data->output);
+	igt_info("Using connector id %d, mode %s\n", connector_id, mode->name);
+	igt_create_pattern_fb(data->fd, mode->hdisplay, mode->vdisplay,
+			      DRM_FORMAT_XRGB8888, 0, &afb);
+	igt_plane_set_fb(data->primary, &afb);
+	igt_display_commit_atomic(display, DRM_MODE_ATOMIC_ALLOW_MODESET, NULL);
+
+	igt_info("\nMode set. content type = No Data (0).\n");
+	igt_info("Press [Enter] to toggle Game <-> No Data, 'q'+[Enter] to quit.\n\n");
+
+	while (fgets(line, sizeof(line), stdin)) {
+		drmModeAtomicReq *req;
+		uint64_t val;
+		int ret;
+
+		if (line[0] == 'q')
+			break;
+
+		game = !game;
+		val = game ? DRM_MODE_CONTENT_TYPE_GAME :
+			     DRM_MODE_CONTENT_TYPE_NO_DATA;
+
+		req = drmModeAtomicAlloc();
+		igt_assert(req);
+		drmModeAtomicAddProperty(req, connector_id, prop_id, val);
+
+		/* Try a seamless, property-only commit first. */
+		ret = drmModeAtomicCommit(data->fd, req, 0, NULL);
+		if (ret) {
+			int nomodeset_err = errno;
+
+			ret = drmModeAtomicCommit(data->fd, req,
+						  DRM_MODE_ATOMIC_ALLOW_MODESET,
+						  NULL);
+			igt_info("content type = %-7s (%llu)  [MODESET required, link blanked] (nomodeset err: %s)\n",
+				 game ? "Game" : "No Data",
+				 (unsigned long long)val,
+				 strerror(nomodeset_err));
+		} else {
+			igt_info("content type = %-7s (%llu)  [seamless, no modeset]\n",
+				 game ? "Game" : "No Data",
+				 (unsigned long long)val);
+		}
+		if (ret)
+			igt_warn("commit failed: %s\n", strerror(errno));
+
+		drmModeAtomicFree(req);
+	}
+
+	igt_remove_fb(data->fd, &afb);
+	test_fini(data);
+}
+
+const char *optstr = "hvt:i:b:y:e:a";
 static void usage(const char *name)
 {
 	igt_info("Usage: %s options\n", name);
@@ -924,7 +1008,8 @@ static void usage(const char *name)
 	igt_info("-b 6|8|10|12|16	Set 6|8|10|12|16 bpc\n");
 	igt_info("-y 1|2|3|4	Set RGB|YUV422|YUV444|YUV420\n");
 	igt_info("-e seconds    number of seconds to display test pattern and exit\n");
-	igt_info("NOTE: if -i is not specified, first connected HDMI connector will be used for -t, -b and -y\n");
+	igt_info("-a            Toggle HDMI content type (ALLM) Game <-> No Data on a live pipe\n");
+	igt_info("NOTE: if -i is not specified, first connected HDMI connector will be used for -t, -b, -y and -a\n");
 }
 
 int main(int argc, char **argv)
@@ -935,6 +1020,7 @@ int main(int argc, char **argv)
 	int conn_id = 0;
 	int max_bpc = 0;
 	int pixel_format = PIXEL_ENCODING_UNKNOWN;
+	bool allm = false;
 
 	memset(&data, 0, sizeof(data));
 
@@ -958,6 +1044,9 @@ int main(int argc, char **argv)
 		case 'e':
 			data.timeout_seconds = atoi(optarg);
 			break;
+		case 'a':
+			allm = true;
+			break;
 		default:
 		case 'h':
 			usage(argv[0]);
@@ -979,7 +1068,9 @@ int main(int argc, char **argv)
 	if (max_bpc)
 		set_max_bpc(&data, max_bpc, conn_id);
 
-	if (vic >= 0) {
+	if (allm) {
+		test_allm_toggle(&data, conn_id);
+	} else if (vic >= 0) {
 		if (vic > ARRAY_SIZE(test_modes) || !test_modes[vic].name[0])
 			igt_warn("VIC %d is not supported\n", vic);
 		else

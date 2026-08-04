@@ -8,6 +8,11 @@
 
 #include <stdint.h>
 
+#define GGTT_PAGE_SIZE			SZ_4K
+#define GGTT_TOP			0xfee00000
+
+#define XELPG_GGTT_PTE_PAT_MASK		GENMASK_ULL(53, 52)
+
 #define GGTT_PTE_ADDR_MASK		GENMASK_ULL(45, 12)
 #define TGL_GGTT_PTE_ADDR_MASK		GENMASK_ULL(38, 12)
 #define   GGTT_PTE_ADDR_SHIFT		12
@@ -16,10 +21,12 @@
 #define TGL_GGTT_PTE_VFID_MASK		GENMASK_ULL(4, 2)
 #define   GGTT_PTE_VFID_SHIFT		2
 
+#define GGTT_PAGE_LM			GENMASK_ULL(1, 1)
 #define GGTT_PAGE_PRESENT		GENMASK_ULL(0, 0)
 
 typedef uint64_t xe_ggtt_pte_t;
 typedef uint64_t xe_ggtt_pte_mask_t;
+typedef uint64_t xe_ggtt_addr_t;
 
 xe_ggtt_pte_mask_t xe_ggtt_get_vfid_mask(int pf_fd);
 xe_ggtt_pte_mask_t xe_ggtt_get_gpa_mask(int pf_fd);

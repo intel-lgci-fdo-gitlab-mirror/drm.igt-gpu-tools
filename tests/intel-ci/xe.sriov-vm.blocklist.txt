@@ -58,3 +58,12 @@ igt@xe_pmu@gt-frequency
 # The feature query_cs_cycles is not supported on VF
 #
 igt@xe_query@.*cs-cycles
+#
+# driver rejects attempts to set wedged_mode=2 on a VF
+#
+igt@xe_wedged@wedged-at-any-timeout
+igt@xe_wedged@wedged-mode-toggle
+#
+# On VF HW PAT may not be readable
+#
+igt@xe_pat@pat-sw-hw.*

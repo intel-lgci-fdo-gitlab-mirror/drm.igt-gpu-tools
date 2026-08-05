@@ -201,8 +201,7 @@ static void intel_fbc_max_plane_size(igt_display_t *display, uint32_t *width, ui
 {
 	int fd = display->drm_fd;
 	const uint32_t dev_id = intel_get_drm_devid(fd);
-	const struct intel_device_info *info = intel_get_device_info(dev_id);
-	int ver = info->graphics_ver;
+	int ver = intel_display_ver(dev_id);
 
 	if (ver >= 30) {
 		*width = 6144;

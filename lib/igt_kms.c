@@ -7063,6 +7063,60 @@ int intel_get_max_pipe_hdisplay(int drm_fd)
 						   HDISPLAY_5K_PER_PIPE;
 }
 
+struct joiner_mode_exception {
+	uint16_t hdisplay, vdisplay;
+	uint32_t clock;
+};
+
+static bool match_joiner_exception(drmModeModeInfo *mode,
+				   const struct joiner_mode_exception *list,
+				   int count)
+{
+	for (int i = 0; i < count; i++) {
+		if (mode->hdisplay == list[i].hdisplay &&
+		    mode->vdisplay == list[i].vdisplay &&
+		    mode->clock == list[i].clock)
+			return true;
+	}
+
+	return false;
+}
+
+/*
+ * TODO: IGT cannot compute the DSC bubble overhead the driver adds to the
+ * effective pixel rate, since it cannot estimate the DSC parameters -
+ * whether DSC is used and how many slices. On NVL this lets modes like
+ * 6144x3456@60 pass igt_bigjoiner_possible()'s clock/hdisplay checks,
+ * yet the kernel still enables bigjoiner for them.
+ *
+ * Add mode_needs_joiner_exception() as a stopgap.
+ */
+static const struct joiner_mode_exception nvl_joiner_exception_modes[] = {
+	{ 6144, 3456, 1413390 }, /* 6144x3456@60Hz */
+};
+
+/*
+ * mode_needs_joiner_exception - check if a mode requires joiner via explicit exception
+ * @drm_fd: drm file descriptor
+ * @mode: libdrm mode
+ *
+ * On some platforms, a higher max_dotclock means certain modes won't trigger
+ * the standard clock or hdisplay checks even though the kernel enables joiner
+ * for them. Each platform has its own exception list.
+ *
+ * Returns: True if the mode is a known joiner exception, else False.
+ */
+static bool mode_needs_joiner_exception(int drm_fd, drmModeModeInfo *mode)
+{
+	unsigned int disp_ver = intel_display_ver(intel_get_drm_devid(drm_fd));
+
+	if (disp_ver == 35)
+		return match_joiner_exception(mode, nvl_joiner_exception_modes,
+					      ARRAY_SIZE(nvl_joiner_exception_modes));
+
+	return false;
+}
+
 /**
  * igt_bigjoiner_possible:
  * @drm_fd: drm file descriptor
@@ -7077,7 +7131,12 @@ int intel_get_max_pipe_hdisplay(int drm_fd)
  */
 bool igt_bigjoiner_possible(int drm_fd, drmModeModeInfo *mode, int max_dotclock)
 {
-	return (mode->hdisplay > intel_get_max_pipe_hdisplay(drm_fd) ||
+	/**
+	 * TODO: remove mode_needs_joiner_exception() once IGT can estimate
+	 * DSC parameters accurately
+	 */
+	return (mode_needs_joiner_exception(drm_fd, mode) ||
+		mode->hdisplay > intel_get_max_pipe_hdisplay(drm_fd) ||
 		mode->clock > max_dotclock);
 }
 

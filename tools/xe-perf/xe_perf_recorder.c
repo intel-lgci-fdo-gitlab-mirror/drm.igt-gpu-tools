@@ -364,6 +364,9 @@ struct recording_context {
 	struct drm_xe_oa_unit *oa_unit;
 	struct drm_xe_engine_class_instance *hwe;
 
+	int oa_buffer_size;
+	int wait_num_reports;
+
 	uint32_t vm;
 	uint32_t exec_queue;
 	struct intel_bb *ibb;
@@ -487,6 +490,12 @@ perf_open(struct recording_context *ctx)
 		DRM_XE_OA_PROPERTY_OA_METRIC_SET, ctx->metric_set->perf_oa_metrics_set,
 		DRM_XE_OA_PROPERTY_OA_FORMAT, __ff(ctx->metric_set->perf_oa_format),
 		DRM_XE_OA_PROPERTY_OA_PERIOD_EXPONENT, ctx->oa_exponent,
+
+		DRM_XE_OA_PROPERTY_OA_BUFFER_SIZE, ctx->oa_buffer_size,
+		DRM_XE_OA_PROPERTY_WAIT_NUM_REPORTS, ctx->wait_num_reports,
+
+		/* Open disabled; the stream is enabled right after open */
+		DRM_XE_OA_PROPERTY_OA_DISABLED, true,
 	};
 	struct intel_xe_oa_open_prop param = {
 		.num_properties = ARRAY_SIZE(properties) / 2,
@@ -924,7 +933,10 @@ usage(const char *name)
 		"     --output,             -o <path>   Output file (default = xe_perf.record)\n"
 		"     --cpu-clock,          -k <path>   Cpu clock to use for correlations\n"
 		"                                       Values: boot, mono, mono_raw (default = mono)\n"
-		"     --oa-unit-id          -u <value>  OA unit id for the capture.\n",
+		"     --oa-unit-id          -u <value>  OA unit id for the capture.\n"
+		"     --oa-buffer-size      -b <value>  OA buffer size in bytes (default = 64M)\n"
+		"     --wait-num-reports    -w <value>  Num reports before unblocking poll()/read()\n"
+		"                                       (default = 1)\n",
 		name);
 }
 
@@ -1038,6 +1050,8 @@ main(int argc, char *argv[])
 		{"command-fifo",	required_argument, 0, 'f'},
 		{"cpu-clock",		required_argument, 0, 'k'},
 		{"oa-unit-id",		required_argument, 0, 'u'},
+		{"oa-buffer-size",	required_argument, 0, 'b'},
+		{"wait-num-reports",	required_argument, 0, 'w'},
 		{0, 0, 0, 0}
 	};
 	const struct {
@@ -1066,9 +1080,11 @@ main(int argc, char *argv[])
 		.command_fifo_fd = -1,
 
 		.oa_unit_id = 0,
+		.oa_buffer_size = 64 * 1024 * 1024,
+		.wait_num_reports = 1,
 	};
 
-	while ((opt = getopt_long(argc, argv, "hc:d:p:m:Co:s:f:k:P:u:", long_options, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, "hc:d:p:m:Co:s:f:k:P:u:b:w:", long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'h':
 			usage(argv[0]);
@@ -1118,6 +1134,12 @@ main(int argc, char *argv[])
 		}
 		case 'u':
 			ctx.oa_unit_id = atoi(optarg);
+			break;
+		case 'b':
+			ctx.oa_buffer_size = atoi(optarg);
+			break;
+		case 'w':
+			ctx.wait_num_reports = atoi(optarg);
 			break;
 		default:
 			fprintf(stderr, "Internal error: "
@@ -1287,6 +1309,12 @@ main(int argc, char *argv[])
 	ctx.perf_fd = perf_open(&ctx);
 	if (ctx.perf_fd < 0) {
 		fprintf(stderr, "Unable to open xe oa stream: %s\n",
+			strerror(errno));
+		goto fail;
+	}
+
+	if (perf_ioctl(ctx.perf_fd, DRM_XE_OBSERVATION_IOCTL_ENABLE, 0) < 0) {
+		fprintf(stderr, "Unable to enable xe oa stream: %s\n",
 			strerror(errno));
 		goto fail;
 	}

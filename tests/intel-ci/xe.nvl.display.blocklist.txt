@@ -95,6 +95,10 @@ igt@kms_content_protection@mei-interface
 ##############################################################################
 igt@kms_chamelium.*@.*(vga).*
 ##############################################################################
+# Valid skip: Missing configuration
+##############################################################################
+igt@kms_tiled_display@basic-test-pattern(-with-chamelium)?
+##############################################################################
 # Valid skip: Use either of connected/non-connected kms_bw
 ##############################################################################
 igt@kms_bw@linear-tiling-.*-display.*

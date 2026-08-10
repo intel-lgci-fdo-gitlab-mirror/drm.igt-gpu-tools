@@ -238,6 +238,13 @@ typedef struct {
 
 static bool is_et_check_needed(data_t *data)
 {
+	/*
+	 * ET is supported only on eDP.
+	 */
+	if (data->output->config.connector->connector_type !=
+	    DRM_MODE_CONNECTOR_eDP)
+		return false;
+
 	switch (data->psr_mode) {
 	case PR_MODE_SEL_FETCH:
 	case PR_MODE_SEL_FETCH_ET:

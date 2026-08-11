@@ -14,6 +14,8 @@
 #include "igt_pci.h"
 #include "igt_sysfs.h"
 #include "igt_kmod.h"
+#include "xe/xe_device.h"
+
 /**
  * TEST: device reset
  * Description: Examine behavior of a driver on device sysfs reset
@@ -392,6 +394,8 @@ static bool is_i915_wedged(int i915)
  */
 static void healthcheck(struct device_fds *dev)
 {
+	int fd;
+
 	if (dev->fds.dev == -1) {
 		/* give the kernel a breath for re-creating device nodes in devtmpfs */
 		sleep(1);
@@ -400,10 +404,13 @@ static void healthcheck(struct device_fds *dev)
 		igt_debug("reopen the device\n");
 		dev->fds.dev = __drm_open_driver(DRIVER_ANY);
 	}
-	igt_assert_fd(dev->fds.dev);
+	fd = dev->fds.dev;
+	igt_assert_fd(fd);
 
-	if (is_i915_device(dev->fds.dev))
-		igt_assert(!is_i915_wedged(dev->fds.dev));
+	if (is_i915_device(fd))
+		igt_assert(!is_i915_wedged(fd));
+	else if (is_xe_device(fd))
+		xe_device_exec_healthcheck(fd);
 }
 
 /**

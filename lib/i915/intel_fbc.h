@@ -14,6 +14,7 @@ enum psr_mode;
 
 void intel_fbc_enable(igt_display_t *display);
 void intel_fbc_disable(igt_display_t *display);
+bool intel_fbc_enable_possible(int drm_fd);
 bool intel_fbc_supported(igt_crtc_t *crtc);
 bool intel_fbc_wait_until_enabled(igt_crtc_t *crtc);
 bool intel_fbc_is_enabled(igt_crtc_t *crtc, int log_level);

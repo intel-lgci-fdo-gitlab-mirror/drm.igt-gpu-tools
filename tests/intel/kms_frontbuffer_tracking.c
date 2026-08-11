@@ -2195,6 +2195,12 @@ static void setup_fbc(void)
 		return;
 	}
 
+	if (!intel_fbc_enable_possible(drm.fd)) {
+		igt_info("Can't test FBC: disabled by enable_fbc modparam\n");
+		fbc.can_test = false;
+		return;
+	}
+
 	fbc.can_test = true;
 
 	fbc_setup_last_action();
@@ -2227,6 +2233,20 @@ static void setup_psr(void)
 		igt_info("Can't test PSR: not supported by sink.\n");
 		return;
 	}
+
+	if (!is_psr_enable_possible(drm.fd, PSR_MODE_1)) {
+		igt_info("Can't test PSR: disabled by enable_psr modparam\n");
+		psr.can_test = false;
+		return;
+	}
+
+	if (psr_sink_support(drm.fd, drm.debugfs, PR_MODE, NULL) &&
+	    !is_psr_enable_possible(drm.fd, PR_MODE)) {
+		igt_info("Can't test Panel Replay: Panel Replay disabled by enable_panel_replay modparam\n");
+		psr.can_test = false;
+		return;
+	}
+
 	psr.can_test = true;
 }
 
@@ -2688,11 +2708,11 @@ static void check_test_requirements(const struct test_mode *t)
 
 	if (t->feature & FEATURE_FBC)
 		igt_require_f(fbc.can_test,
-			      "Can't test FBC with this chipset\n");
+			      "Can't test FBC (unsupported or disabled by enable_fbc modparam)\n");
 
 	if (t->feature & FEATURE_PSR) {
 		igt_require_f(psr.can_test,
-			      "Can't test PSR with the current outputs\n");
+			      "Can't test PSR (unsupported or disabled by enable_psr modparam)\n");
 	}
 
 	if (t->feature & FEATURE_DRRS)

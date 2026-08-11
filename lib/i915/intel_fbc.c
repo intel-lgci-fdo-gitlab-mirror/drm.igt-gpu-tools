@@ -21,6 +21,28 @@ void intel_fbc_disable(igt_display_t *display)
 }
 
 /**
+ * intel_fbc_enable_possible:
+ * @drm_fd: Device file descriptor
+ *
+ * Check if FBC is allowed to be enabled by reading the enable_fbc modparam.
+ *
+ * Returns:
+ * true if enable_fbc modparam allows FBC to be enabled, false otherwise.
+ */
+bool intel_fbc_enable_possible(int drm_fd)
+{
+	char *param_value;
+	int enable_fbc;
+
+	param_value = __igt_params_get(drm_fd, "enable_fbc");
+	igt_assert_f(param_value, "Could not read enable_fbc modparam\n");
+	enable_fbc = atoi(param_value);
+	free(param_value);
+
+	return enable_fbc != 0;
+}
+
+/**
  * intel_fbc_get_status_crtc_index
  * @device: fd of the device
  * @crtc: crtc index

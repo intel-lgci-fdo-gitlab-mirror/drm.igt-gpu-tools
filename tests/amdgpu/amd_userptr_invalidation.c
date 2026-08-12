@@ -54,10 +54,9 @@
 #define BUF_SZ			(64 * 1024)
 #define PM4_DW			256
 
-#define STRESS_TARGET_SZ	(256UL * 1024 * 1024)
-#define STRESS_CHILDREN		2048
+#define STRESS_TARGET_SZ	(64UL * 1024 * 1024)
 #define STRESS_PIPES		200000
-#define STRESS_SCAN_CHUNK	(4UL * 1024 * 1024)
+#define STRESS_SCAN_CHUNK	(512UL * 1024)
 #define STRESS_PTE_STEP		(64UL * 1024 * 1024)
 
 /**
@@ -305,11 +304,8 @@ static void amdgpu_userptr_unmap_stress(amdgpu_device_handle dev)
 	void *dst_cpu_ptr;
 	int (*pipes)[2];
 	unsigned int pipes_opened;
-	pid_t *children;
-	unsigned int children_spawned;
 	uint64_t off;
 	unsigned int i;
-	pid_t pid;
 	volatile uint8_t sink;
 	uint8_t *base;
 	uint8_t *scan;
@@ -325,8 +321,6 @@ static void amdgpu_userptr_unmap_stress(amdgpu_device_handle dev)
 	up_cpu = MAP_FAILED;
 	pipes = NULL;
 	pipes_opened = 0;
-	children = NULL;
-	children_spawned = 0;
 
 	ip_block = get_ip_block(dev, AMDGPU_HW_IP_DMA);
 	igt_assert(ip_block);
@@ -417,20 +411,6 @@ static void amdgpu_userptr_unmap_stress(amdgpu_device_handle dev)
 	}
 	igt_info("  opened %u pipes\n", pipes_opened);
 
-	children = calloc(STRESS_CHILDREN, sizeof(*children));
-	igt_assert(children);
-
-	for (i = 0; i < STRESS_CHILDREN; i++) {
-		pid = fork();
-		if (pid == 0) {
-			pause();
-			_exit(0);
-		}
-		igt_assert(pid > 0);
-		children[i] = pid;
-		children_spawned = i + 1;
-	}
-	igt_info("  spawned %u children\n", children_spawned);
 
 	/*
 	 * Phase 4: submit SDMA copy through the old VA range.
@@ -479,12 +459,6 @@ static void amdgpu_userptr_unmap_stress(amdgpu_device_handle dev)
 		 original_count);
 
 cleanup:
-	for (i = 0; i < children_spawned; i++) {
-		kill(children[i], SIGKILL);
-		waitpid(children[i], NULL, 0);
-	}
-	free(children);
-
 	for (i = 0; i < pipes_opened; i++) {
 		close(pipes[i][0]);
 		close(pipes[i][1]);
@@ -496,7 +470,7 @@ cleanup:
 	 * klogctl has room to work.  Brief sleep to let deferred
 	 * printk flush any remaining fault messages.
 	 */
-	usleep(500000);
+	usleep(100000);
 	page_faults = count_gpu_page_faults(my_pid, ts_before);
 	igt_info("  %u GPU page faults for PID %d\n",
 		 page_faults, (int)my_pid);

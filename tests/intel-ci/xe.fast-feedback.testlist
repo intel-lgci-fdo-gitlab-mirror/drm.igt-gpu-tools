@@ -253,11 +253,6 @@ igt@xe_waitfence@abstime
 igt@xe_waitfence@engine
 igt@xe_waitfence@reltime
 
-# All tests that do module unloading and reloading are executed last.
-# They will sometimes reveal issues of earlier tests leaving the
-# driver in a broken state that is not otherwise noticed in that test.
-igt@core_hotunplug@unbind-rebind
-
 # Run KUnit tests at the end
 igt@xe_live_ktest@xe_bo@xe_ccs_migrate_kunit
 igt@xe_live_ktest@xe_bo@xe_bo_evict_kunit
@@ -314,3 +309,8 @@ igt@xe_evict@evict-small-cm
 igt@xe_evict@evict-small-external
 igt@xe_evict@evict-small-external-cm
 igt@xe_evict@evict-small-multi-vm
+
+# All tests that do module unloading and reloading are executed last.
+# They will sometimes reveal issues of earlier tests leaving the
+# driver in a broken state that is not otherwise noticed in that test.
+igt@core_hotunplug@unbind-rebind

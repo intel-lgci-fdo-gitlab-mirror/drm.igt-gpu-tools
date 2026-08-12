@@ -19,6 +19,7 @@ igt@xe_evict.*
 igt@xe_pm@d3hot-mmap-vram
 igt@xe_eudebug_online@writes-caching-(?!sram-bb-sram-target-sram).*
 igt@xe_compute_preempt@.*vram.*
+igt@xe_sriov_vram@.*
 igt@xe_vm@out-of-memory
 ##################################################################
 # Valid skip: PAT index tests targeting older/different platforms

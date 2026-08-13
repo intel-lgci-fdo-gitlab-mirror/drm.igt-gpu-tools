@@ -181,10 +181,10 @@ static void amdgpu_create_ip_queues(amdgpu_device_handle device,
 	amdgpu_dma_limits_query(device, &limits);
 
 	if (user_queue)
-		available_rings = ring_context->hw_ip_info.num_userq_slots ?
-			((1 << ring_context->hw_ip_info.num_userq_slots) -1) : 1;
+		available_rings = hw_ip_info.num_userq_slots ?
+			((1 << hw_ip_info.num_userq_slots) - 1) : 1;
 	else
-		available_rings = ring_context->hw_ip_info.available_rings;
+		available_rings = hw_ip_info.available_rings;
 
 	if (available_rings <= 0) {
 		*ring_context_out = NULL;

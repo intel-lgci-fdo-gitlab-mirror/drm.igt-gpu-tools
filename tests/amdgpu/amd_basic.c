@@ -553,7 +553,8 @@ amdgpu_sync_dependency_test(amdgpu_device_handle device_handle, bool user_queue)
 		igt_assert_eq(r, 0);
 	}
 
-	shader = get_shader_bin(&size_bytes, &code_offset, &data_offset);
+	shader = get_shader_bin(&size_bytes, &code_offset, &data_offset,
+				ip_block->funcs->family_id);
 
 	/* assign cmd buffer */
 	base->attach_buf(base, ib_result_cpu, const_size);

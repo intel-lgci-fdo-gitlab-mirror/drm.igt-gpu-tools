@@ -30,7 +30,8 @@
 #include "amdgpu/compute_utils/amd_shared_dispatch.h"
 
 const uint32_t *
-get_shader_bin(uint32_t *size_bytes, uint32_t *code_offset, uint32_t *data_offset);
+get_shader_bin(uint32_t *size_bytes, uint32_t *code_offset, uint32_t *data_offset,
+	       uint32_t family_id);
 
 int
 amdgpu_dispatch_load_cs_shader_hang_slow(uint32_t *ptr, uint32_t family_id);

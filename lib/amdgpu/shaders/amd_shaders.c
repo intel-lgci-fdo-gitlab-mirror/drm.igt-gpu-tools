@@ -109,12 +109,43 @@ uint32_t shader_bin[] = {
 	SWAP_32(0x000070e0), SWAP_32(0x00000080), SWAP_32(0x000081bf)
 };
 
+/*
+ * GFX12 (RDNA4) re-encoded several of the SOP/FLAT opcodes used above
+ * (s_endpgm, s_cbranch_scc0, the store), so the GFX11 blob decodes into
+ * different instructions and the shader neither terminates nor stores its
+ * result. This is the same kernel re-assembled for gfx1200:
+ *
+ *	s_mov_b32 s2, 0
+ * .Lloop:
+ *	s_add_co_i32 s2, s2, 1
+ *	s_cmp_gt_u32 s2, 0x0098967f
+ *	s_cbranch_scc0 .Lloop
+ *	v_mov_b32_e32 v0, 42
+ *	v_mov_b32_e32 v1, s0
+ *	v_mov_b32_e32 v2, s1
+ *	flat_store_b32 v[1:2], v0
+ *	s_endpgm
+ */
+static  const
+uint32_t shader_bin_gfx12[] = {
+	SWAP_32(0x800082be), SWAP_32(0x02810281), SWAP_32(0x02ff08bf), SWAP_32(0x7f969800),
+	SWAP_32(0xfcffa1bf), SWAP_32(0xaa02007e), SWAP_32(0x0002027e), SWAP_32(0x0102047e),
+	SWAP_32(0x7c8006ec), SWAP_32(0x00000000), SWAP_32(0x01000000), SWAP_32(0x0000b0bf)
+};
+
 const uint32_t *
-get_shader_bin(uint32_t *size_bytes, uint32_t *code_offset, uint32_t *data_offset)
+get_shader_bin(uint32_t *size_bytes, uint32_t *code_offset, uint32_t *data_offset,
+	       uint32_t family_id)
 {
-	*size_bytes = sizeof(shader_bin);
 	*code_offset =  CODE_OFFSET;
 	*data_offset = DATA_OFFSET;
+
+	if (family_id == AMDGPU_FAMILY_GC_12_0_0) {
+		*size_bytes = sizeof(shader_bin_gfx12);
+		return shader_bin_gfx12;
+	}
+
+	*size_bytes = sizeof(shader_bin);
 	return shader_bin;
 }
 

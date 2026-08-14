@@ -79,6 +79,7 @@
 		    "include": [
 			{ "LNL": "../intel-ci/xe.lnl.core.blocklist.txt" },
 			{ "BMG": "../intel-ci/xe.bmg.core.blocklist.txt" },
+			{ "CRI": "../intel-ci/xe.cri.core.blocklist.txt" },
 			{ "NVL": "../intel-ci/xe.nvl.core.blocklist.txt" },
 			{ "PTL": "../intel-ci/xe.ptl.core.blocklist.txt" },
 			{ "WCL": "../intel-ci/xe.wcl.core.blocklist.txt" },

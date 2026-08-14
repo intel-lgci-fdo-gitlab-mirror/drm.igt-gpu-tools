@@ -37,6 +37,10 @@ my $verbose = 0;
 my $ignore_unused = 0;
 my $skip_func = 0;
 
+my $lcov_version = eval {
+	my $var = `lcov --version|grep -Eo '[0-9]+(\.[0-9]+)'|head -1`;
+	$var;
+};
 my $has_json_support = eval {
 	require Cpanel::JSON::XS;
 	Cpanel::JSON::XS->import(qw(decode_json));
@@ -459,6 +463,7 @@ sub read_info($)
 	my $ignore = 0;
 	my $source = $before_sf;
 	my $func = $before_sf;
+	my $alias = $before_sf;
 	my $cur_test = "";
 	my %cached;
 
@@ -526,13 +531,56 @@ sub read_info($)
 
 		next if ($ignore);
 
-		# Function coverage
+		# Function coverage, the leader
+		# FN:<function index>,<line number of the function start><line number of the function end>
+		# this seems to be format for lcov/geninfo package 2.3
+		if (m/^FNL:(-?\d+),(-?\d+),(-?\d+)/) {
+			my $ln = $2;
+			my $end_ln = $3;
 
+			$func = $1;
+			$has_func = 1;
+
+			if (is_function_excluded($func)) {
+				$skip_func = 1;
+				next;
+			}
+
+			$skip_func = 0;
+
+			$record{files}{$source}{func}{$func}{start_line} = $ln;
+			$record{files}{$source}{func}{$func}{end_line} = $end_ln;
+			$all_func{$func}{$source}->{ln} = $ln;
+			next;
+		}
+		# Function coverage
+		# FN:<line number of function start>,<line number of the function end><function name>
+		# this seems to be format for lcov/geninfo 2.0, obsoleted on 2.3
+		elsif (m/^FN:(-?\d+),(-?\d+),(\w+)/) {
+			my $ln = $1;
+			my $end_ln = $2;
+
+			$func = $3;
+			$has_func = 1;
+
+			if (is_function_excluded($func)) {
+				$skip_func = 1;
+				next;
+			}
+
+			$skip_func = 0;
+
+			$record{files}{$source}{func}{$func}{start_line} = $ln;
+			$record{files}{$source}{func}{$func}{end_line} = $end_ln;
+			$all_func{$func}{$source}->{ln} = $ln;
+			next;
+		}
 		# FN:<line number of function start>,<function name>
 		# Note: /w+ intentionally removes IPA gcc-optimization names, as
 		# this is more related to branch coverage
-		if (m/^FN:(-?\d+),(\w+)/) {
+		elsif (m/^FN:(-?\d+),(\w+)/) {
 			my $ln = $1;
+			my $start_ln = $2;
 
 			$func = $2;
 			$has_func = 1;
@@ -549,11 +597,38 @@ sub read_info($)
 			next;
 		}
 
-		# Parse functions that were actually used
+		# Parse functions that were actually used (package version >2.0)
+		# FNA:<function index>,<execution count><function name>
+		if (m/^FNA:(-?\d+),(-?\d+),(\w+)/) {
+			my $count = $2;
+
+			# Negative gcov results are possible, as reported at:
+			# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=67937
+			# Lcov ignores those. So, let's do the same here.
+			next if ($count <= 0);
+
+			$func = $1;
+			$alias = $3;
+			$has_func = 1;
+
+			if (is_function_excluded($alias)) {
+				$skip_func = 1;
+				next;
+			}
+
+			$skip_func = 0;
+			$was_used = 1;
+
+			$record{files}{$source}{func}{$func}{execution_count} += $count;
+			$record{files}{$source}{func}{$func}{alias} = $alias;
+			$used_func{$func}{$source}->{count} += $count;
+			next;
+		}
+		# Parse functions that were actually used (package version <=2.0)
 		# FNDA:<execution count>,<function name>
 		# Note: /w+ intentionally removes IPA gcc-optimization names, as
 		# this is more related to branch coverage
-		if (m/^FNDA:(-?\d+),(\w+)/) {
+		elsif (m/^FNDA:(-?\d+),(\w+)/) {
 			my $count = $1;
 
 			# Negative gcov results are possible, as reported at:
@@ -745,6 +820,7 @@ sub write_info_file($)
 	# Fills $data with the contents to be stored at the file
 	foreach my $source(sort keys %{$record{files}}) {
 		next if (!$used_source{$source});
+		next if is_file_excluded($source);
 
 		if ($source ne $before_sf) {
 			$data .= "SF:$source\n";
@@ -754,11 +830,29 @@ sub write_info_file($)
 			if ($func ne $before_sf) {
 				my $fn;
 				my $fnda;
-
-				if (defined($record{files}{$source}{func}{$func}{start_line})) {
+				#lcov/geninfo 2.3 (>2.0) has additional leader
+				#https://manpages.ubuntu.com/manpages/questing/man1/geninfo.1.html
+				if ($lcov_version>2.0) {
+					$data .= "FNL:$func," . $record{files}{$source}{func}{$func}{start_line} . "," . $record{files}{$source}{func}{$func}{end_line} . "\n";
+				}
+				#lcov/geninfo 2.0 (>1.14) has also end_line defined for FN
+				#https://manpages.ubuntu.com/manpages/noble/man1/geninfo.1.html
+				elsif ($lcov_version==2.0) {
+					$data .= "FN:" . $record{files}{$source}{func}{$func}{start_line} . "," . $record{files}{$source}{func}{$func}{end_line} . ",$func\n";
+				}
+				#lcov/geninfo 1.14
+				elsif (defined($record{files}{$source}{func}{$func}{start_line})) {
 					$data .= "FN:" . $record{files}{$source}{func}{$func}{start_line} . ",$func\n";
 				}
-				if (defined($record{files}{$source}{func}{$func}{execution_count})) {
+				#lcov/geninfo 2.3 (>2.0) has the function covered as FNA line
+				#https://manpages.ubuntu.com/manpages/questing/man1/geninfo.1.html
+				if ($lcov_version>2.0) {
+					if ($record{files}{$source}{func}{$func}{alias}) {
+						$data .= "FNA:$func," . $record{files}{$source}{func}{$func}{execution_count} . "," . $record{files}{$source}{func}{$func}{alias} . "\n";
+					}
+				}
+				#lcov/geninfo 1.14 has the function covered as FNDA line
+				elsif (defined($record{files}{$source}{func}{$func}{execution_count})) {
 					$data .= "FNDA:" . $record{files}{$source}{func}{$func}{execution_count} . ",$func\n";
 				}
 

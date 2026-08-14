@@ -766,6 +766,15 @@ static void capture_crc(data_t *data, unsigned int vblank, igt_crc_t *crc)
 {
 	igt_pipe_crc_get_for_frame(data->drm_fd, data->pipe_crc, vblank, crc);
 
+	/*
+	 * Platforms with an internal CRC queue (e.g. MediaTek) report CRC
+	 * entries with a frame number greater than the requested vblank due
+	 * to pipeline delay. Since igt_pipe_crc_get_for_frame() already
+	 * guarantees crc->frame >= vblank, skip the exact-match check.
+	 */
+	if (is_mtk_device(data->drm_fd))
+		return;
+
 	igt_fail_on_f(!igt_skip_crc_compare && !igt_run_in_simulation() &&
 		      crc->has_valid_frame && crc->frame != vblank,
 		      "Got CRC for the wrong frame (got %u, expected %u). CRC buffer overflow?\n",

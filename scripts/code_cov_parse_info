@@ -1548,6 +1548,41 @@ if ($only_xe) {
 	# Please keep in sync with the documentation
 	push @src_exclude_regexes, "selftest";
 	push @src_include_regexes, "drm/xe";
+        push @src_include_regexes, "drm/i915/display";
+        #For xe the following display related sources are not part of the build
+        push @src_exclude_regexes, "drm/i915/display/dvo";
+        push @src_exclude_regexes, "drm/i915/display/g4x";
+        push @src_exclude_regexes, "drm/i915/display/hsw_ips.c";
+        push @src_exclude_regexes, "drm/i915/display/i9xx";
+        push @src_exclude_regexes, "drm/i915/display/.*_dsi";
+        push @src_exclude_regexes, "drm/i915/display/intel_bo.c";
+        push @src_exclude_regexes, "drm/i915/display/intel_crt.c";
+        push @src_exclude_regexes, "drm/i915/display/intel_display_presi.c";
+        push @src_exclude_regexes, "drm/i915/display/intel_display_reset.c";
+        push @src_exclude_regexes, "drm/i915/display/intel_display_rps.c";
+        push @src_exclude_regexes, "drm/i915/display/intel_display_snapshot.c";
+        push @src_exclude_regexes, "drm/i915/display/intel_dp\.h\$";
+        push @src_exclude_regexes, "drm/i915/display/intel_dpio_phy\.";
+        push @src_exclude_regexes, "drm/i915/display/intel_dpll\.c\$";
+        push @src_exclude_regexes, "drm/i915/display/intel_dpt\.c\$";
+        push @src_exclude_regexes, "drm/i915/display/intel_dsb_buffer.c";
+        push @src_exclude_regexes, "drm/i915/display/intel_dvo.c";
+        push @src_exclude_regexes, "drm/i915/display/intel_fb_bo.c";
+        push @src_exclude_regexes, "drm/i915/display/intel_fb_pin.c";
+        push @src_exclude_regexes, "drm/i915/display/intel_fbdev_fb.c";
+        push @src_exclude_regexes, "drm/i915/display/intel_fdi\.c\$";
+        push @src_exclude_regexes, "drm/i915/display/intel_hdcp_gsc\.c\$";
+        push @src_exclude_regexes, "drm/i915/display/intel_load_detect.c";
+        push @src_exclude_regexes, "drm/i915/display/intel_lpe_audio.c";
+        push @src_exclude_regexes, "drm/i915/display/intel_lspcon\.c\$";
+        push @src_exclude_regexes, "drm/i915/display/intel_lvds.c";
+        push @src_exclude_regexes, "drm/i915/display/intel_overlay.c";
+        push @src_exclude_regexes, "drm/i915/display/intel_pch_";
+        push @src_exclude_regexes, "drm/i915/display/intel_pfit\.c\$";
+        push @src_exclude_regexes, "drm/i915/display/intel_plane_initial.c";
+        push @src_exclude_regexes, "drm/i915/display/intel_svdo.c";
+        push @src_exclude_regexes, "drm/i915/display/intel_sprite";
+        push @src_exclude_regexes, "drm/i915/display/intel_tv.c";
 #	push @src_include_regexes, "drm/ttm";
 #	push @src_include_regexes, "drm/vgem";
 }

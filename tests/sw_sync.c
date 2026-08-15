@@ -334,6 +334,7 @@ static void test_sync_merge_invalid(void)
 	fence_invalid = drm_open_driver(DRIVER_ANY);
 	fence_merge = sync_fence_merge(in_fence, fence_invalid);
 	igt_assert_f(fence_merge < 0, "Verify invalid fd (device fd) handling");
+	drm_close_driver(fence_invalid);
 
 	fence_invalid = mkstemp(tmppath);
 	if (fence_invalid == -1) {
@@ -341,7 +342,6 @@ static void test_sync_merge_invalid(void)
 		goto out;
 	}
 	unlink(tmppath);
-	fence_invalid = drm_open_driver(DRIVER_ANY);
 	fence_merge = sync_fence_merge(in_fence, fence_invalid);
 	close(fence_invalid);
 	igt_assert_f(fence_merge < 0, "Verify invalid fd (file fd) handling");

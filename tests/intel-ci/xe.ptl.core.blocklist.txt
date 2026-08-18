@@ -13,15 +13,24 @@ igt@xe_cw_post_sync@walker-post-sync
 ##################################################################
 # Expected skip as iGPU has no vram
 ##################################################################
-igt@xe_mmap@vram$
-igt@xe_mmap@small-bar
-igt@xe_sysfs_tile@physical_vram_size_bytes
-igt@xe_noexec_ping_pong@.*
-igt@xe_create@create-big-vram
-igt@xe_pm@d3hot-mmap-vram
 igt@xe_compute_preempt@.*vram.*
-igt@xe_vm@out-of-memory
+igt@xe_create@create-big-vram
 igt@xe_evict.*
+igt@xe_madvise@atomic.*
+igt@xe_mmap@small-bar
+igt@xe_mmap@vram$
+igt@xe_noexec_ping_pong@.*
+igt@xe_pm@d3hot-mmap-vram
+igt@xe_pm_residency@aspm_link_residency
+igt@xe_sysfs_tile@physical_vram_size_bytes
+igt@xe_vm@out-of-memory
+igt@xe_vm@overcommit.*
+##################################################################
+# Expected skip as VM_BIND decompression and the compressed PAT
+# index variants (wt / uc-comp) require device-local memory
+##################################################################
+igt@xe_ccs@vm-bind.*
+igt@xe_exec_system_allocator@pat-index-madvise-pat-idx-(wt|uc-comp)-(single|multi)-vma
 ##################################################################
 # No d3cold support for HW as of now
 ##################################################################
@@ -36,20 +45,18 @@ igt@xe_pm_residency@cpg-basic
 # Expected skips as the tests are only expected to run on older
 # platforms
 ##################################################################
+igt@xe_media_fill@media-fill
 igt@xe_pat@pat-index-xe3p-xpc
 igt@xe_pat@pat-index-xehpc
 igt@xe_pat@pat-index-xelp
 igt@xe_pat@pat-index-xelpg
-igt@xe_media_fill@media-fill
-igt@xe_compute@ccs-mode-basic
-igt@xe_configfs@survivability-mode
 ##################################################################
 # Features not supported for integrated platforms
 ##################################################################
+igt@.*multigpu.*
 igt@intel_hwmon@.*
-igt@.*@.*multigpu.*
-igt@xe_peer2peer@.*
 igt@xe_mmap@pci-membarrier.*
+igt@xe_peer2peer@.*
 igt@xe_pm@d3hot-i2c
 ##################################################################
 # Expected skip for the platform as the tests need more than
@@ -82,5 +89,5 @@ igt@xe_fault_injection@exec-queue-create-fail-xe_pxp_exec_queue_add
 ##################################################################
 # survivability feature not applicable for PTL
 ##################################################################
-igt@xe_survivability@.*
+igt@.*survivability.*
 #################################################################

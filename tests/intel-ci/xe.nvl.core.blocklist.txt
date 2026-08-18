@@ -11,16 +11,24 @@ igt@fbdev@.*
 # dedicated VRAM. Tests requiring device-local memory (VRAM),
 # small-BAR configurations, or VRAM eviction are not applicable.
 ##################################################################
-igt@xe_mmap@vram$
-igt@xe_mmap@small-bar
-igt@xe_noexec_ping_pong
-igt@xe_create@create-big-vram
-igt@xe_evict.*
-igt@xe_pm@d3hot-mmap-vram
-igt@xe_eudebug_online@writes-caching-(?!sram-bb-sram-target-sram).*
 igt@xe_compute_preempt@.*vram.*
+igt@xe_create@create-big-vram
+igt@xe_eudebug_online@writes-caching-(?!sram-bb-sram-target-sram).*
+igt@xe_evict.*
+igt@xe_madvise@atomic.*
+igt@xe_mmap@small-bar
+igt@xe_mmap@vram$
+igt@xe_noexec_ping_pong
+igt@xe_pm@d3hot-mmap-vram
 igt@xe_sriov_vram@.*
 igt@xe_vm@out-of-memory
+igt@xe_vm@overcommit.*
+##################################################################
+# Expected skip as VM_BIND decompression and the compressed PAT
+# index variants (wt / uc-comp) require device-local memory
+##################################################################
+igt@xe_ccs@vm-bind.*
+igt@xe_exec_system_allocator@pat-index-madvise-pat-idx-(wt|uc-comp)-(single|multi)-vma
 ##################################################################
 # Valid skip: PAT index tests targeting older/different platforms
 # These PAT (Page Attribute Table) index subtests validate
@@ -30,10 +38,10 @@ igt@xe_vm@out-of-memory
 # NVL uses its own PAT encoding; running these tests would
 # produce incorrect results or false failures.
 ##################################################################
+igt@xe_media_fill@media-fill
 igt@xe_pat@pat-index-xehpc
 igt@xe_pat@pat-index-xelp
 igt@xe_pat@pat-index-xelpg
-igt@xe_media_fill@media-fill
 igt@xe_pat@pat-index-xe2
 ##################################################################
 # Valid skip as test is applicable for Xe3p xpc and later platforms
@@ -59,8 +67,9 @@ igt@xe_compute@eu-busy-10s
 #     requires a TEE (Trusted Execution Environment) and
 #     associated firmware, which NVL does not support.
 ##################################################################
-igt@xe_huc_copy@huc_copy
 igt@xe_exec_balancer@.*
+igt@xe_fault_injection@exec-queue-create-fail-xe_pxp_exec_queue_add
+igt@xe_huc_copy@huc_copy
 igt@xe_oa@oa-tlb-invalidate
 igt@xe_pxp@.*
 ##################################################################
@@ -70,16 +79,23 @@ igt@xe_pm@d3hot-i2c
 ##################################################################
 # Valid skip: multigpu/multitile tests are not supported on NVL
 ##################################################################
-igt@.*@.*multigpu.*
-igt@xe_peer2peer@.*
 igt@.*@.*tiles
+igt@.*multigpu.*
+igt@xe_peer2peer@.*
 ##################################################################
 # Valid skip: Not Applicable for iGPUs
 ##################################################################
+igt@.*survivability.*
 igt@intel_hwmon@.*
 igt@xe_mmap@pci-membarrier.*
-igt@xe_configfs@survivability-mode
-igt@xe_survivability@.*
+igt@xe_pm@.*d3cold.*
+igt@xe_pm_residency@aspm_link_residency
+##################################################################
+# Valid skip: S3 (deep) suspend is not supported on NVL
+##################################################################
+igt@xe_gt_freq@freq_suspend
+igt@xe_pm@s3.*
+igt@xe_pm_residency@cpg-basic
 ##################################################################
 # Valid skip: EU debugger and SIP (System Interrupt Protocol)
 # support is not yet available in the kernel for NVL. These tests

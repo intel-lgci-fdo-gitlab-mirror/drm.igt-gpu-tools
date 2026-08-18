@@ -29,6 +29,7 @@
 
 #define SYNC_OBJ_SIGNALED	(0x1 << 0)
 #define LEGACY_MODE_ADDR	0x1a0000
+#define PRESSURE_COUNT		32
 
 static void ignore_gt_reset_warnings_in_dmesg(void)
 {
@@ -133,6 +134,7 @@ static void test_spin(int fd, struct drm_xe_engine_class_instance *eci,
 #define MULTI_QUEUE			(0x1 << 14)
 #define SECONDARY_QUEUE			(0x1 << 15)
 #define RESET_SYNC_MODE			(0x1 << 16)
+#define MEM_PRESSURE_STRESS		(0x1 << 17)
 
 /**
  * SUBTEST: %s-cat-error
@@ -657,6 +659,30 @@ struct gt_thread_data {
 	bool do_reset;
 };
 
+static void pressure_bo_create(int fd, uint32_t vm, int gt,
+			       uint32_t *bos, int *count)
+{
+	int i;
+
+	*count = 0;
+	for (i = 0; i < PRESSURE_COUNT; i++) {
+		bos[i] = xe_bo_create(fd, vm, xe_bb_size(fd, SZ_2M),
+				      vram_if_possible(fd, gt),
+				      DRM_XE_GEM_CREATE_FLAG_NEEDS_VISIBLE_VRAM);
+		if (!bos[i])
+			break;
+		(*count)++;
+	}
+}
+
+static void pressure_bo_destroy(int fd, uint32_t *bos, int count)
+{
+	int i;
+
+	for (i = 0; i < count; i++)
+		gem_close(fd, bos[i]);
+}
+
 static void do_resets(struct gt_thread_data *t)
 {
 	while (!*(t->exit)) {
@@ -676,7 +702,10 @@ static void submit_jobs(struct gt_thread_data *t)
 	uint64_t addr = 0x1a0000;
 	size_t bo_size = xe_bb_size(fd, SZ_4K);
 	uint32_t bo;
+	uint32_t pressure_bos[PRESSURE_COUNT];
 	uint32_t *data;
+	int pressure_count;
+	int i = 0;
 
 	bo = xe_bo_create(fd, vm, bo_size, vram_if_possible(fd, t->gt),
 			  DRM_XE_GEM_CREATE_FLAG_NEEDS_VISIBLE_VRAM);
@@ -684,6 +713,9 @@ static void submit_jobs(struct gt_thread_data *t)
 	data[0] = MI_BATCH_BUFFER_END;
 
 	xe_vm_bind_sync(fd, vm, bo, 0, addr, bo_size);
+
+	if (t->flags & MEM_PRESSURE_STRESS)
+		pressure_bo_create(fd, vm, t->gt, pressure_bos, &pressure_count);
 
 	while (!*(t->exit)) {
 		struct drm_xe_engine_class_instance instance = {
@@ -707,7 +739,18 @@ static void submit_jobs(struct gt_thread_data *t)
 		xe_exec(fd, &exec);
 		xe_exec_queue_destroy(fd, exec.exec_queue_id);
 		(*t->num_submit)++;
+
+		if ((t->flags & MEM_PRESSURE_STRESS) && !(i % 128)) {
+			pressure_bo_destroy(fd, pressure_bos, pressure_count);
+			pressure_count = 0;
+			pressure_bo_create(fd, vm, t->gt, pressure_bos, &pressure_count);
+		}
+
+		i++;
 	}
+
+	if (t->flags & MEM_PRESSURE_STRESS)
+		pressure_bo_destroy(fd, pressure_bos, PRESSURE_COUNT);
 
 	munmap(data, bo_size);
 	gem_close(fd, bo);
@@ -742,6 +785,10 @@ static void *gt_reset_thread(void *data)
  *
  * SUBTEST: gt-stress-reset-concurrent-submit-sync
  * Description: Stress concurrent GT resets and job submissions with sync resets
+ * Test category: stress test
+ *
+ * SUBTEST: gt-stress-reset-memory-pressure
+ * Description: Stress concurrent GT resets and job submissions under memory pressure
  * Test category: stress test
  *
  */
@@ -962,6 +1009,7 @@ int igt_main()
 	const struct section ssections[] = {
 		{ "reset-concurrent-submit", 0 },
 		{ "reset-concurrent-submit-sync", RESET_SYNC_MODE },
+		{ "reset-memory-pressure", MEM_PRESSURE_STRESS },
 		{ NULL },
 	};
 	int gt;

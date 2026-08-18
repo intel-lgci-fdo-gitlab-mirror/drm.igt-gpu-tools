@@ -650,6 +650,9 @@ struct gt_thread_data {
 	int *go;
 	int *exit;
 	int *num_reset;
+	int *num_submit;
+	int *num_submit_fail;
+	unsigned int flags;
 	bool do_reset;
 };
 
@@ -671,7 +674,7 @@ static void submit_jobs(struct gt_thread_data *t)
 	uint32_t bo;
 	uint32_t *data;
 
-	bo = xe_bo_create(fd, vm, bo_size, vram_if_possible(fd, 0),
+	bo = xe_bo_create(fd, vm, bo_size, vram_if_possible(fd, t->gt),
 			  DRM_XE_GEM_CREATE_FLAG_NEEDS_VISIBLE_VRAM);
 	data = xe_bo_map(fd, bo, bo_size);
 	data[0] = MI_BATCH_BUFFER_END;
@@ -682,7 +685,7 @@ static void submit_jobs(struct gt_thread_data *t)
 		struct drm_xe_engine_class_instance instance = {
 			.engine_class = DRM_XE_ENGINE_CLASS_COPY,
 			.engine_instance = 0,
-			.gt_id = 0,
+			.gt_id = t->gt,
 		};
 		struct drm_xe_exec exec = {
 			.address = addr,
@@ -692,11 +695,14 @@ static void submit_jobs(struct gt_thread_data *t)
 
 		/* GuC IDs can get exhausted */
 		ret = __xe_exec_queue_create(fd, vm, 1, 1, &instance, 0, &exec.exec_queue_id);
-		if (ret)
+		if (ret) {
+			(*t->num_submit_fail)++;
 			continue;
+		}
 
 		xe_exec(fd, &exec);
 		xe_exec_queue_destroy(fd, exec.exec_queue_id);
+		(*t->num_submit)++;
 	}
 
 	munmap(data, bo_size);
@@ -726,14 +732,19 @@ static void *gt_reset_thread(void *data)
  * Description: Stress GT reset
  * Test category: stress test
  *
+ * SUBTEST: gt-stress-reset-concurrent-submit
+ * Description: Stress concurrent GT resets and job submissions
+ * Test category: stress test
+ *
  */
 static void
-gt_reset(int fd, int n_threads, int n_sec)
+gt_reset(int fd, int gt, int n_threads, int n_sec, unsigned int flags)
 {
 	struct gt_thread_data *threads;
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
 	int go = 0, exit = 0, num_reset = 0, i;
+	int num_submit = 0, num_submit_fail = 0;
 
 	threads = calloc(n_threads, sizeof(struct gt_thread_data));
 	igt_assert(threads);
@@ -745,10 +756,13 @@ gt_reset(int fd, int n_threads, int n_sec)
 		threads[i].mutex = &mutex;
 		threads[i].cond = &cond;
 		threads[i].fd = fd;
-		threads[i].gt = 0;
+		threads[i].gt = gt;
+		threads[i].flags = flags;
 		threads[i].go = &go;
 		threads[i].exit = &exit;
 		threads[i].num_reset = &num_reset;
+		threads[i].num_submit = &num_submit;
+		threads[i].num_submit_fail = &num_submit_fail;
 		threads[i].do_reset = (i == 0);
 
 		pthread_create(&threads[i].thread, 0, gt_reset_thread,
@@ -766,8 +780,11 @@ gt_reset(int fd, int n_threads, int n_sec)
 	for (i = 0; i < n_threads; i++)
 		pthread_join(threads[i].thread, NULL);
 
-	igt_info("number of resets %d\n", num_reset);
+	igt_info("number of resets %d, submissions %d, submit fails %d\n",
+		 num_reset, num_submit, num_submit_fail);
 
+	igt_assert_neq(num_reset, 0);
+	igt_assert_neq(num_submit, 0);
 	free(threads);
 }
 
@@ -932,6 +949,10 @@ int igt_main()
 	} sections[] = {
 		{ "virtual", VIRTUAL },
 		{ "parallel", PARALLEL },
+		{ NULL },
+	};
+	const struct section ssections[] = {
+		{ "reset-concurrent-submit", 0 },
 		{ NULL },
 	};
 	int gt;
@@ -1126,7 +1147,12 @@ int igt_main()
 	}
 
 	igt_subtest("gt-reset-stress")
-		gt_reset(fd, 4, 1);
+		gt_reset(fd, 0, 4, 1, 0);
+
+	for (const struct section *s = ssections; s->name; s++) {
+		igt_subtest_f("gt-stress-%s", s->name)
+			gt_reset(fd, 0, 8, 2, 0);
+	}
 
 	igt_subtest("gt-mocs-reset")
 		xe_for_each_gt(fd, gt)

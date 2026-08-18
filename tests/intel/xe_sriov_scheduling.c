@@ -369,44 +369,6 @@ static void init_vf_ids(uint8_t *array, size_t n,
 	}
 }
 
-struct vf_sched_params {
-	uint32_t exec_quantum_ms;
-	uint32_t preempt_timeout_us;
-	enum xe_sriov_sched_priority priority;
-};
-
-static int __set_vfs_scheduling_params(int pf_fd, int num_vfs,
-				       const struct vf_sched_params *p)
-{
-	int ret = 0;
-
-	ret = __xe_sriov_admin_bulk_set_exec_quantum_ms(pf_fd, p->exec_quantum_ms);
-	if (igt_warn_on_f(ret,
-			  "Failed to bulk set exec quantum=%u: %d\n",
-			  p->exec_quantum_ms, ret))
-		return ret;
-
-	ret = __xe_sriov_admin_bulk_set_preempt_timeout_us(pf_fd, p->preempt_timeout_us);
-	if (igt_warn_on_f(ret,
-			  "Failed to bulk set preempt timeout=%u: %d\n",
-			  p->preempt_timeout_us, ret))
-		return ret;
-
-	ret = __xe_sriov_admin_bulk_set_sched_priority(pf_fd, p->priority);
-	if (igt_warn_on_f(ret,
-			  "Failed to bulk set sched priority=%d: %d\n",
-			  p->priority, ret))
-		return ret;
-
-	return ret;
-}
-
-static void set_vfs_scheduling_params(int pf_fd, int num_vfs,
-				      const struct vf_sched_params *p)
-{
-	igt_assert_eq(0, __set_vfs_scheduling_params(pf_fd, num_vfs, p));
-}
-
 static bool check_within_epsilon(const double x, const double ref, const double tol)
 {
 	return x <= (1.0 + tol) * ref && x >= (1.0 - tol) * ref;
@@ -483,7 +445,7 @@ static void compute_common_time_frame_stats(struct subm_set *set)
 struct job_sched_params {
 	int duration_ms;
 	int num_repeats;
-	struct vf_sched_params sched_params;
+	struct xe_sriov_sched_params sched_params;
 };
 
 static uint32_t sysfs_get_job_timeout_ms(int fd, const struct drm_xe_engine_class_instance *eci)
@@ -566,15 +528,17 @@ static unsigned int select_inflight_k(unsigned int duration_ms,
 	return 2;
 }
 
-static struct vf_sched_params prepare_vf_sched_params(int num_threads,
-						      int min_num_repeats,
-						      int job_timeout_ms,
-						      const struct subm_opts *opts,
-						      enum xe_sriov_sched_priority priority)
+static struct xe_sriov_sched_params prepare_vf_sched_params(int num_threads,
+							    int min_num_repeats,
+							    int job_timeout_ms,
+							    const struct subm_opts *opts,
+							    enum xe_sriov_sched_priority priority)
 {
-	struct vf_sched_params params = { MIN_EXEC_QUANTUM_MS,
-					  derive_preempt_timeout_us(MIN_EXEC_QUANTUM_MS),
-						  priority };
+	struct xe_sriov_sched_params params = {
+		.exec_quantum_ms = MIN_EXEC_QUANTUM_MS,
+		.preempt_timeout_us = derive_preempt_timeout_us(MIN_EXEC_QUANTUM_MS),
+		.priority = priority,
+	};
 
 	if (opts->exec_quantum_ms || opts->preempt_timeout_us) {
 		if (opts->exec_quantum_ms)
@@ -617,7 +581,7 @@ prepare_job_sched_params(int num_threads, int job_timeout_ms, const struct subm_
 
 struct vf_config {
 	unsigned int vf_id;
-	struct vf_sched_params sched_params;
+	struct xe_sriov_sched_params sched_params;
 	bool run_workload;
 };
 
@@ -1154,8 +1118,8 @@ static void throughput_ratio(int pf_fd, int num_vfs, const struct subm_opts *opt
 							     job_timeout_ms,
 							     opts, priority);
 		xe_sriov_disable_vfs_restore_auto_provisioning(pf_fd);
-		set_vfs_scheduling_params(pf_fd, num_vfs,
-					  &job_sched_params->sched_params);
+		xe_sriov_admin_bulk_set_sched_params(pf_fd,
+						     &job_sched_params->sched_params);
 		igt_sriov_enable_driver_autoprobe(pf_fd);
 		igt_sriov_enable_vfs(pf_fd, num_vfs);
 	}
@@ -1196,10 +1160,9 @@ static void nonpreempt_engine_resets(int pf_fd, int num_vfs,
 	igt_assert(job_sched_params);
 
 	if (!job_sched_params->num_repeats) {
-		struct vf_sched_params vf_sched_params = prepare_vf_sched_params(num_vfs, 1,
-										 job_timeout_ms,
-										 opts,
-										 priority);
+		struct xe_sriov_sched_params vf_sched_params =
+			prepare_vf_sched_params(num_vfs, 1, job_timeout_ms,
+						opts, priority);
 
 		*job_sched_params = (struct job_sched_params) {
 			.sched_params = vf_sched_params,
@@ -1208,8 +1171,8 @@ static void nonpreempt_engine_resets(int pf_fd, int num_vfs,
 			.num_repeats = 1,
 		};
 		xe_sriov_disable_vfs_restore_auto_provisioning(pf_fd);
-		set_vfs_scheduling_params(pf_fd, num_vfs,
-					  &job_sched_params->sched_params);
+		xe_sriov_admin_bulk_set_sched_params(pf_fd,
+						     &job_sched_params->sched_params);
 		igt_sriov_enable_driver_autoprobe(pf_fd);
 		igt_sriov_enable_vfs(pf_fd, num_vfs);
 	}
@@ -1280,7 +1243,7 @@ prepare_default_enabled_job_sched_params(int pf_fd,
 	struct job_sched_params params = { };
 	uint32_t min_exec_quantum_ms = UINT32_MAX;
 
-	params.sched_params = (struct vf_sched_params) {
+	params.sched_params = (struct xe_sriov_sched_params) {
 		.exec_quantum_ms = xe_sriov_admin_get_exec_quantum_ms(pf_fd, vf_ids[0]),
 		.preempt_timeout_us = xe_sriov_admin_get_preempt_timeout_us(pf_fd, vf_ids[0]),
 		.priority = xe_sriov_admin_get_sched_priority(pf_fd, vf_ids[0], NULL),
@@ -1566,8 +1529,7 @@ int igt_main_args("", long_opts, help_str, subm_opts_handler, NULL)
 
 		igt_fixture() {
 			xe_sriov_disable_vfs_restore_auto_provisioning(pf_fd);
-			__set_vfs_scheduling_params(pf_fd, igt_sriov_get_total_vfs(pf_fd),
-						    &(struct vf_sched_params){});
+			__xe_sriov_admin_bulk_restore_sched_defaults(pf_fd);
 		}
 	}
 
@@ -1618,8 +1580,7 @@ int igt_main_args("", long_opts, help_str, subm_opts_handler, NULL)
 
 		igt_fixture() {
 			xe_sriov_disable_vfs_restore_auto_provisioning(pf_fd);
-			__set_vfs_scheduling_params(pf_fd, igt_sriov_get_total_vfs(pf_fd),
-						    &(struct vf_sched_params){});
+			__xe_sriov_admin_bulk_restore_sched_defaults(pf_fd);
 		}
 	}
 
@@ -1627,8 +1588,7 @@ int igt_main_args("", long_opts, help_str, subm_opts_handler, NULL)
 		int ret;
 
 		xe_sriov_disable_vfs_restore_auto_provisioning(pf_fd);
-		ret = __set_vfs_scheduling_params(pf_fd, igt_sriov_get_total_vfs(pf_fd),
-						  &(struct vf_sched_params){});
+		ret = __xe_sriov_admin_bulk_restore_sched_defaults(pf_fd);
 		/* abort to avoid execution of next tests with enabled VFs */
 		igt_abort_on_f(igt_sriov_get_enabled_vfs(pf_fd) > 0,
 			       "Failed to disable VF(s)");

@@ -13,6 +13,22 @@
 
 struct igt_sysfs_choice;
 
+/**
+ * struct xe_sriov_sched_params - Scheduling parameters for a function
+ * @exec_quantum_ms: Execution quantum in milliseconds
+ * @preempt_timeout_us: Preemption timeout in microseconds
+ * @priority: Scheduling priority
+ *
+ * Zero @exec_quantum_ms or zero @preempt_timeout_us means infinity, which is
+ * only valid together with %XE_SRIOV_SCHED_PRIORITY_LOW. Use
+ * xe_sriov_admin_bulk_restore_sched_defaults() to return to that state.
+ */
+struct xe_sriov_sched_params {
+	uint32_t exec_quantum_ms;
+	uint32_t preempt_timeout_us;
+	enum xe_sriov_sched_priority priority;
+};
+
 bool xe_sriov_admin_is_present(int pf_fd);
 
 int  __xe_sriov_admin_set_exec_quantum_ms(int pf_fd, unsigned int vf_num, uint32_t eq_ms);
@@ -48,6 +64,10 @@ int __xe_sriov_admin_bulk_set_sched_priority(int pf_fd,
 					     enum xe_sriov_sched_priority prio);
 void xe_sriov_admin_bulk_set_sched_priority(int pf_fd,
 					    enum xe_sriov_sched_priority prio);
+int __xe_sriov_admin_bulk_set_sched_params(int pf_fd,
+					   const struct xe_sriov_sched_params *params);
+void xe_sriov_admin_bulk_set_sched_params(int pf_fd,
+					  const struct xe_sriov_sched_params *params);
 
 int  __xe_sriov_admin_vf_stop(int pf_fd, unsigned int vf_num);
 void  xe_sriov_admin_vf_stop(int pf_fd, unsigned int vf_num);

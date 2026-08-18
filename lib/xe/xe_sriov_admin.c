@@ -506,6 +506,59 @@ void xe_sriov_admin_bulk_set_sched_priority(int pf_fd,
 }
 
 /**
+ * __xe_sriov_admin_bulk_set_sched_params - Set scheduling parameters for PF and all VFs
+ * @pf_fd:  PF device file descriptor.
+ * @params: Scheduling parameters to apply.
+ *
+ * Applies execution quantum and preemption timeout before priority, so that a
+ * priority above LOW is never active while timeslicing is still infinite.
+ *
+ * Both &xe_sriov_sched_params.exec_quantum_ms and
+ * &xe_sriov_sched_params.preempt_timeout_us must be non-zero. Use
+ * __xe_sriov_admin_bulk_restore_sched_defaults() to restore infinite timeslicing.
+ *
+ * Returns: 0 on success or negative errno on error.
+ */
+int __xe_sriov_admin_bulk_set_sched_params(int pf_fd,
+					   const struct xe_sriov_sched_params *params)
+{
+	int ret;
+
+	if (igt_warn_on_f(!params->exec_quantum_ms || !params->preempt_timeout_us,
+			  "Infinite timeslicing requires restoring defaults: eq=%u pt=%u\n",
+			  params->exec_quantum_ms, params->preempt_timeout_us))
+		return -EINVAL;
+
+	ret = __xe_sriov_admin_bulk_set_exec_quantum_ms(pf_fd, params->exec_quantum_ms);
+	if (igt_warn_on_f(ret, "Failed to bulk set exec quantum=%u: %d\n",
+			  params->exec_quantum_ms, ret))
+		return ret;
+
+	ret = __xe_sriov_admin_bulk_set_preempt_timeout_us(pf_fd, params->preempt_timeout_us);
+	if (igt_warn_on_f(ret, "Failed to bulk set preempt timeout=%u: %d\n",
+			  params->preempt_timeout_us, ret))
+		return ret;
+
+	ret = __xe_sriov_admin_bulk_set_sched_priority(pf_fd, params->priority);
+	if (igt_warn_on_f(ret, "Failed to bulk set sched priority=%d: %d\n",
+			  params->priority, ret))
+		return ret;
+
+	return 0;
+}
+
+/**
+ * xe_sriov_admin_bulk_set_sched_params - Assert wrapper for bulk scheduling params update
+ * @pf_fd:  PF device file descriptor.
+ * @params: Scheduling parameters to apply.
+ */
+void xe_sriov_admin_bulk_set_sched_params(int pf_fd,
+					  const struct xe_sriov_sched_params *params)
+{
+	igt_assert_eq(0, __xe_sriov_admin_bulk_set_sched_params(pf_fd, params));
+}
+
+/**
  * __xe_sriov_admin_vf_stop - Issue stop command for a VF
  * @pf_fd:  PF device file descriptor.
  * @vf_num: VF index.

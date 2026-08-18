@@ -135,6 +135,7 @@ static void test_spin(int fd, struct drm_xe_engine_class_instance *eci,
 #define SECONDARY_QUEUE			(0x1 << 15)
 #define RESET_SYNC_MODE			(0x1 << 16)
 #define MEM_PRESSURE_STRESS		(0x1 << 17)
+#define INVALIDATE_BO_STRESS		(0x1 << 18)
 
 /**
  * SUBTEST: %s-cat-error
@@ -655,9 +656,40 @@ struct gt_thread_data {
 	int *num_reset;
 	int *num_submit;
 	int *num_submit_fail;
+	int *num_vm_recreate;
 	unsigned int flags;
 	bool do_reset;
 };
+
+static void bo_ctx_destroy(int fd, uint32_t *vm, uint32_t *bo,
+			   uint32_t **data, size_t bo_size)
+{
+	if (*data) {
+		munmap(*data, bo_size);
+		*data = NULL;
+	}
+
+	if (*bo) {
+		gem_close(fd, *bo);
+		*bo = 0;
+	}
+
+	if (*vm) {
+		xe_vm_destroy(fd, *vm);
+		*vm = 0;
+	}
+}
+
+static void bo_ctx_create(int fd, int gt, uint64_t addr, size_t bo_size,
+			  uint32_t *vm, uint32_t *bo, uint32_t **data)
+{
+	*vm = xe_vm_create(fd, 0, 0);
+	*bo = xe_bo_create(fd, *vm, bo_size, vram_if_possible(fd, gt),
+			   DRM_XE_GEM_CREATE_FLAG_NEEDS_VISIBLE_VRAM);
+	*data = xe_bo_map(fd, *bo, bo_size);
+	(*data)[0] = MI_BATCH_BUFFER_END;
+	xe_vm_bind_sync(fd, *vm, *bo, 0, addr, bo_size);
+}
 
 static void pressure_bo_create(int fd, uint32_t vm, int gt,
 			       uint32_t *bos, int *count)
@@ -746,6 +778,19 @@ static void submit_jobs(struct gt_thread_data *t)
 			pressure_bo_create(fd, vm, t->gt, pressure_bos, &pressure_count);
 		}
 
+		if (((t->flags & INVALIDATE_BO_STRESS) && !(i % 96))) {
+			if (t->flags & MEM_PRESSURE_STRESS) {
+				pressure_bo_destroy(fd, pressure_bos, pressure_count);
+				pressure_count = 0;
+			}
+
+			bo_ctx_destroy(fd, &vm, &bo, &data, bo_size);
+			bo_ctx_create(fd, t->gt, addr, bo_size, &vm, &bo, &data);
+			if (t->flags & MEM_PRESSURE_STRESS)
+				pressure_bo_create(fd, vm, t->gt, pressure_bos, &pressure_count);
+			(*t->num_vm_recreate)++;
+		}
+
 		i++;
 	}
 
@@ -791,6 +836,10 @@ static void *gt_reset_thread(void *data)
  * Description: Stress concurrent GT resets and job submissions under memory pressure
  * Test category: stress test
  *
+ * SUBTEST: gt-stress-reset-bo-invalidation
+ * Description: Stress concurrent GT resets and job submissions while invalidating BO CPU mappings
+ * Test category: stress test
+ *
  */
 static void
 gt_reset(int fd, int gt, int n_threads, int n_sec, unsigned int flags)
@@ -799,7 +848,7 @@ gt_reset(int fd, int gt, int n_threads, int n_sec, unsigned int flags)
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
 	int go = 0, exit = 0, num_reset = 0, i;
-	int num_submit = 0, num_submit_fail = 0;
+	int num_submit = 0, num_submit_fail = 0, num_vm_recreate = 0;
 
 	threads = calloc(n_threads, sizeof(struct gt_thread_data));
 	igt_assert(threads);
@@ -818,6 +867,7 @@ gt_reset(int fd, int gt, int n_threads, int n_sec, unsigned int flags)
 		threads[i].num_reset = &num_reset;
 		threads[i].num_submit = &num_submit;
 		threads[i].num_submit_fail = &num_submit_fail;
+		threads[i].num_vm_recreate = &num_vm_recreate;
 		threads[i].do_reset = (i == 0);
 
 		pthread_create(&threads[i].thread, 0, gt_reset_thread,
@@ -835,8 +885,8 @@ gt_reset(int fd, int gt, int n_threads, int n_sec, unsigned int flags)
 	for (i = 0; i < n_threads; i++)
 		pthread_join(threads[i].thread, NULL);
 
-	igt_info("number of resets %d, submissions %d, submit fails %d\n",
-		 num_reset, num_submit, num_submit_fail);
+	igt_info("number of resets %d, submissions %d, submit fails %d vm_recreate %d\n",
+		 num_reset, num_submit, num_submit_fail, num_vm_recreate);
 
 	igt_assert_neq(num_reset, 0);
 	igt_assert_neq(num_submit, 0);
@@ -1010,6 +1060,7 @@ int igt_main()
 		{ "reset-concurrent-submit", 0 },
 		{ "reset-concurrent-submit-sync", RESET_SYNC_MODE },
 		{ "reset-memory-pressure", MEM_PRESSURE_STRESS },
+		{ "reset-bo-invalidation", INVALIDATE_BO_STRESS },
 		{ NULL },
 	};
 	int gt;

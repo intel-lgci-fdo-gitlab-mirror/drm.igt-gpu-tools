@@ -137,6 +137,7 @@ static void test_spin(int fd, struct drm_xe_engine_class_instance *eci,
 #define MEM_PRESSURE_STRESS		(0x1 << 17)
 #define INVALIDATE_BO_STRESS		(0x1 << 18)
 #define RAPID_RESET_STRESS		(0x1 << 19)
+#define DESTROY_VM_CTX_STRESS		(0x1 << 20)
 
 /**
  * SUBTEST: %s-cat-error
@@ -781,7 +782,8 @@ static void submit_jobs(struct gt_thread_data *t)
 			pressure_bo_create(fd, vm, t->gt, pressure_bos, &pressure_count);
 		}
 
-		if (((t->flags & INVALIDATE_BO_STRESS) && !(i % 96))) {
+		if (((t->flags & INVALIDATE_BO_STRESS) && !(i % 96)) ||
+		    ((t->flags & DESTROY_VM_CTX_STRESS) && !(i % 128))) {
 			if (t->flags & MEM_PRESSURE_STRESS) {
 				pressure_bo_destroy(fd, pressure_bos, pressure_count);
 				pressure_count = 0;
@@ -845,6 +847,10 @@ static void *gt_reset_thread(void *data)
  *
  * SUBTEST: gt-stress-reset-rapid-cycle
  * Description: Stress concurrent GT resets and job submissions with rapid-cycle resets
+ * Test category: stress test
+ *
+ * SUBTEST: gt-stress-reset-destroy-vm-context
+ * Description: Stress concurrent GT resets and job submissions while destroying and recreating VM context
  * Test category: stress test
  *
  */
@@ -1069,6 +1075,7 @@ int igt_main()
 		{ "reset-memory-pressure", MEM_PRESSURE_STRESS },
 		{ "reset-bo-invalidation", INVALIDATE_BO_STRESS },
 		{ "reset-rapid-cycle", RAPID_RESET_STRESS },
+		{ "reset-destroy-vm-context", DESTROY_VM_CTX_STRESS },
 		{ NULL },
 	};
 	int gt;

@@ -130,6 +130,43 @@ static struct gpgpu_shader *get_prefetch_shader(int fd)
 	return shader;
 }
 
+static struct gpgpu_shader *get_l2_prefetch_shader(int fd)
+{
+	struct gpgpu_shader *shader;
+	uint64_t addr = xe_canonical_va(fd, PREFETCH_ADDR);
+
+	igt_assert_f((addr & 0x7) == 0, "address must be aligned to QWord!\n");
+
+	shader = gpgpu_shader_create(fd);
+
+	/*
+	 * This shader can only be used when in efficient 64bit mode.
+	 * For a given arbitrary ppgtt virtual address, it raises an L2 prefetch fault
+	 * using load instruction with L1 uncached + L2 cached cache policy.
+	 * With L1 uncached, the prefetch bypasses LSC and is sourced from L2.
+	 */
+	emit_iga64_code(shader, xe_l2_prefetch_fault_prefetch, R"(
+#if GFX_VER >= 3500
+L0:
+// Set base address with scalar register
+(W)   mov (1)                s0.0<1>:ud                         ARG(0):ud
+(W)   mov (1)                s0.1<1>:ud                         ARG(1):ud
+
+// A64 offset
+(W)   mov (8)                r30.0<1>:uq                       0x0:uq
+
+// Prefetch operations are implemented using a NULL destination register.
+// L1 uncached forces the prefetch to bypass LSC, making L2 the fault source.
+// load.ugm.d64t.a64.uc.ca.uc [src0]
+(W)   sendg.ugm (1)          null         r30:1      null:0     s0.0        0x49C00
+#endif
+	)", lower_32_bits(addr), upper_32_bits(addr));
+
+	gpgpu_shader__eot(shader);
+
+	return shader;
+}
+
 /**
  * SUBTEST: prefetch-fault
  * Description: Validate L1 prefetch fault and hit-under-miss behavior with
@@ -139,6 +176,16 @@ static struct gpgpu_shader *get_prefetch_shader(int fd)
  * SUBTEST: prefetch-fault-svm
  * Description: Validate L1 prefetch fault and hit-under-miss behavior in SVM
  *		mode with L1 cached, L2 cached cache policy (fault source: LSC)
+ * Run type: FULL
+ *
+ * SUBTEST: l2-prefetch-fault
+ * Description: Validate L2 prefetch fault and hit-under-miss behavior with
+ *		L1 uncached, L2 cached cache policy (fault source: L2)
+ * Run type: FULL
+ *
+ * SUBTEST: l2-prefetch-fault-svm
+ * Description: Validate L2 prefetch fault and hit-under-miss behavior in SVM
+ *		mode with L1 uncached, L2 cached cache policy (fault source: L2)
  * Run type: FULL
  */
 static void test_prefetch_fault(int fd, struct drm_xe_engine_class_instance *hwe,
@@ -292,6 +339,32 @@ int igt_main()
 					      hwe->engine_instance)
 					test_prefetch_fault(fd, hwe, true,
 							    get_prefetch_shader);
+			}
+		}
+	}
+
+	igt_subtest_with_dynamic("l2-prefetch-fault") {
+		xe_for_each_engine(fd, hwe) {
+			if (hwe->engine_class == DRM_XE_ENGINE_CLASS_RENDER ||
+			    hwe->engine_class == DRM_XE_ENGINE_CLASS_COMPUTE) {
+				igt_dynamic_f("%s%d", xe_engine_class_string(hwe->engine_class),
+					      hwe->engine_instance)
+					test_prefetch_fault(fd, hwe, false,
+							    get_l2_prefetch_shader);
+			}
+		}
+	}
+
+	igt_subtest_with_dynamic("l2-prefetch-fault-svm") {
+		if (!svm_supported)
+			igt_skip("SVM not supported on this device, skipping.\n");
+		xe_for_each_engine(fd, hwe) {
+			if (hwe->engine_class == DRM_XE_ENGINE_CLASS_RENDER ||
+			    hwe->engine_class == DRM_XE_ENGINE_CLASS_COMPUTE) {
+				igt_dynamic_f("%s%d", xe_engine_class_string(hwe->engine_class),
+					      hwe->engine_instance)
+					test_prefetch_fault(fd, hwe, true,
+							    get_l2_prefetch_shader);
 			}
 		}
 	}

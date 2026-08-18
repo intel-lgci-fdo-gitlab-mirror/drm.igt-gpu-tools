@@ -138,6 +138,7 @@ static void test_spin(int fd, struct drm_xe_engine_class_instance *eci,
 #define INVALIDATE_BO_STRESS		(0x1 << 18)
 #define RAPID_RESET_STRESS		(0x1 << 19)
 #define DESTROY_VM_CTX_STRESS		(0x1 << 20)
+#define MIXED_ENGINE_STRESS		(0x1 << 21)
 
 /**
  * SUBTEST: %s-cat-error
@@ -653,6 +654,7 @@ struct gt_thread_data {
 	pthread_cond_t *cond;
 	int fd;
 	int gt;
+	int id;
 	int *go;
 	int *exit;
 	int *num_reset;
@@ -691,6 +693,22 @@ static void bo_ctx_create(int fd, int gt, uint64_t addr, size_t bo_size,
 	*data = xe_bo_map(fd, *bo, bo_size);
 	(*data)[0] = MI_BATCH_BUFFER_END;
 	xe_vm_bind_sync(fd, *vm, *bo, 0, addr, bo_size);
+}
+
+static void fill_mixed_engine(struct gt_thread_data *t, int iter,
+			      struct drm_xe_engine_class_instance *instance)
+{
+	const uint16_t classes[] = {
+		DRM_XE_ENGINE_CLASS_COPY,
+		DRM_XE_ENGINE_CLASS_RENDER,
+		DRM_XE_ENGINE_CLASS_COMPUTE,
+		DRM_XE_ENGINE_CLASS_VIDEO_DECODE,
+		DRM_XE_ENGINE_CLASS_VIDEO_ENHANCE,
+	};
+
+	instance->gt_id = t->gt;
+	instance->engine_instance = 0;
+	instance->engine_class = classes[(iter + t->id) % ARRAY_SIZE(classes)];
 }
 
 static void pressure_bo_create(int fd, uint32_t vm, int gt,
@@ -764,6 +782,9 @@ static void submit_jobs(struct gt_thread_data *t)
 			.num_batch_buffer = 1,
 		};
 		int ret;
+
+		if (t->flags & MIXED_ENGINE_STRESS)
+			fill_mixed_engine(t, i, &instance);
 
 		/* GuC IDs can get exhausted */
 		ret = __xe_exec_queue_create(fd, vm, 1, 1, &instance, 0, &exec.exec_queue_id);
@@ -853,6 +874,10 @@ static void *gt_reset_thread(void *data)
  * Description: Stress concurrent GT resets and job submissions while destroying and recreating VM context
  * Test category: stress test
  *
+ * SUBTEST: gt-stress-reset-mixed-engine-usage
+ * Description: Stress concurrent GT resets and mixed-engine job submissions
+ * Test category: stress test
+ *
  */
 static void
 gt_reset(int fd, int gt, int n_threads, int n_sec, unsigned int flags)
@@ -874,6 +899,7 @@ gt_reset(int fd, int gt, int n_threads, int n_sec, unsigned int flags)
 		threads[i].cond = &cond;
 		threads[i].fd = fd;
 		threads[i].gt = gt;
+		threads[i].id = i;
 		threads[i].flags = flags;
 		threads[i].go = &go;
 		threads[i].exit = &exit;
@@ -1076,6 +1102,7 @@ int igt_main()
 		{ "reset-bo-invalidation", INVALIDATE_BO_STRESS },
 		{ "reset-rapid-cycle", RAPID_RESET_STRESS },
 		{ "reset-destroy-vm-context", DESTROY_VM_CTX_STRESS },
+		{ "reset-mixed-engine-usage", MIXED_ENGINE_STRESS | RAPID_RESET_STRESS },
 		{ NULL },
 	};
 	int gt;

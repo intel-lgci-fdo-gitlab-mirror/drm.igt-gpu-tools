@@ -887,6 +887,10 @@ static void *gt_reset_thread(void *data)
  * Description: Stress concurrent GT resets and job submissions during PM transition windows
  * Test category: stress test
  *
+ * SUBTEST: gt-stress-reset-engine-hang
+ * Description: Test GT reset while long spinner workload is active
+ * Test category: stress test
+ *
  */
 static void
 gt_reset(int fd, int gt, int n_threads, int n_sec, unsigned int flags)
@@ -1313,6 +1317,14 @@ int igt_main()
 		igt_subtest_f("gt-stress-%s", s->name)
 			gt_reset(fd, 0, 8, 2, s->flags);
 	}
+
+	igt_subtest("gt-stress-reset-engine-hang")
+		xe_for_each_engine(fd, hwe) {
+			xe_legacy_test_mode(fd, hwe, 2, 4,
+					    GT_RESET | LONG_SPIN,
+					    LEGACY_MODE_ADDR, false);
+			break;
+		}
 
 	igt_subtest("gt-mocs-reset")
 		xe_for_each_gt(fd, gt)

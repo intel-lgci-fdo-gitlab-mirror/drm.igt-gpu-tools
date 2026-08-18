@@ -117,9 +117,11 @@ static struct intel_bb *xe_bb_create_on_offset(int fd, uint32_t exec_queue, uint
 	return ibb;
 }
 
+typedef struct gpgpu_shader *(*get_shader_fn)(int fd);
+
 static struct gpgpu_shader *get_prefetch_shader(int fd)
 {
-	static struct gpgpu_shader *shader;
+	struct gpgpu_shader *shader;
 
 	shader = gpgpu_shader_create(fd);
 	gpgpu_shader__prefetch_fault(shader, xe_canonical_va(fd, PREFETCH_ADDR));
@@ -130,14 +132,17 @@ static struct gpgpu_shader *get_prefetch_shader(int fd)
 
 /**
  * SUBTEST: prefetch-fault
- * Description: Validate prefetch fault and hit-under-miss behavior
+ * Description: Validate L1 prefetch fault and hit-under-miss behavior with
+ *		L1 cached, L2 cached cache policy (fault source: LSC)
  * Run type: FULL
  *
  * SUBTEST: prefetch-fault-svm
- * Description: Validate prefetch fault and hit-under-miss behavior in SVM mode
+ * Description: Validate L1 prefetch fault and hit-under-miss behavior in SVM
+ *		mode with L1 cached, L2 cached cache policy (fault source: LSC)
  * Run type: FULL
  */
-static void test_prefetch_fault(int fd, struct drm_xe_engine_class_instance *hwe, bool svm)
+static void test_prefetch_fault(int fd, struct drm_xe_engine_class_instance *hwe,
+				bool svm, get_shader_fn get_shader)
 {
 	uint64_t bb_offset = BB_OFFSET;
 	/*
@@ -191,7 +196,7 @@ static void test_prefetch_fault(int fd, struct drm_xe_engine_class_instance *hwe
 	ibb = xe_bb_create_on_offset(fd, exec_queue_id, vm, bb_offset, bb_size);
 	intel_bb_set_lr_mode(ibb, true);
 
-	shader = get_prefetch_shader(fd);
+	shader = get_shader(fd);
 	gpgpu_shader_exec(ibb, buf, w_dim.x, w_dim.y, shader, NULL, 0, 0);
 	gpgpu_shader_destroy(shader);
 	intel_bb_sync(ibb);
@@ -225,7 +230,7 @@ static void test_prefetch_fault(int fd, struct drm_xe_engine_class_instance *hwe
 	ibb = xe_bb_create_on_offset(fd, exec_queue_id, vm, bb_offset2, bb_size);
 	intel_bb_set_lr_mode(ibb, true);
 
-	shader = get_prefetch_shader(fd);
+	shader = get_shader(fd);
 	gpgpu_shader_exec(ibb, buf, w_dim.x, w_dim.y, shader, NULL, 0, 0);
 	gpgpu_shader_destroy(shader);
 	intel_bb_sync(ibb);
@@ -271,7 +276,8 @@ int igt_main()
 			    hwe->engine_class == DRM_XE_ENGINE_CLASS_COMPUTE) {
 				igt_dynamic_f("%s%d", xe_engine_class_string(hwe->engine_class),
 					      hwe->engine_instance)
-					test_prefetch_fault(fd, hwe, false);
+					test_prefetch_fault(fd, hwe, false,
+							    get_prefetch_shader);
 			}
 		}
 	}
@@ -284,7 +290,8 @@ int igt_main()
 			    hwe->engine_class == DRM_XE_ENGINE_CLASS_COMPUTE) {
 				igt_dynamic_f("%s%d", xe_engine_class_string(hwe->engine_class),
 					      hwe->engine_instance)
-					test_prefetch_fault(fd, hwe, true);
+					test_prefetch_fault(fd, hwe, true,
+							    get_prefetch_shader);
 			}
 		}
 	}

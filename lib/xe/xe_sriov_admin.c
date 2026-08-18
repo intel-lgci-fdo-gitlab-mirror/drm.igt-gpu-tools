@@ -547,12 +547,23 @@ void xe_sriov_admin_vf_stop(int pf_fd, unsigned int vf_num)
  *
  * Resets execution quantum, preemption timeout, and priority to driver defaults.
  *
+ * Zero execution quantum and zero preemption timeout both mean infinity, so
+ * priority is lowered first. A function left at a priority above LOW with
+ * infinite timeslicing may never be switched away from by GuC, and can only be
+ * recovered by PAUSE/FLR.
+ *
  * Returns: 0 on success or negative errno on error.
  */
 int __xe_sriov_admin_restore_sched_defaults(int pf_fd, unsigned int vf_num)
 {
 	int ret_eq, ret_pt, ret_prio;
 	int ret = 0;
+
+	ret_prio = __xe_sriov_admin_set_sched_priority(pf_fd, vf_num,
+						       XE_SRIOV_SCHED_PRIORITY_LOW);
+	igt_warn_on(ret_prio);
+	if (!ret)
+		ret = ret_prio;
 
 	ret_eq = __xe_sriov_admin_set_exec_quantum_ms(pf_fd, vf_num, 0);
 	igt_warn_on(ret_eq);
@@ -563,12 +574,6 @@ int __xe_sriov_admin_restore_sched_defaults(int pf_fd, unsigned int vf_num)
 	igt_warn_on(ret_pt);
 	if (!ret)
 		ret = ret_pt;
-
-	ret_prio = __xe_sriov_admin_set_sched_priority(pf_fd, vf_num,
-						       XE_SRIOV_SCHED_PRIORITY_LOW);
-	igt_warn_on(ret_prio);
-	if (!ret)
-		ret = ret_prio;
 
 	return ret;
 }
@@ -589,12 +594,21 @@ void xe_sriov_admin_restore_sched_defaults(int pf_fd, unsigned int vf_num)
  *
  * Resets PF and all VFs to driver default scheduling parameters.
  *
+ * Priority is lowered before clearing timeslicing, see
+ * __xe_sriov_admin_restore_sched_defaults().
+ *
  * Returns: 0 on success or negative errno on error.
  */
 int __xe_sriov_admin_bulk_restore_sched_defaults(int pf_fd)
 {
 	int ret_eq, ret_pt, ret_prio;
 	int ret = 0;
+
+	ret_prio = __xe_sriov_admin_bulk_set_sched_priority(pf_fd,
+							    XE_SRIOV_SCHED_PRIORITY_LOW);
+	igt_warn_on(ret_prio);
+	if (!ret)
+		ret = ret_prio;
 
 	ret_eq = __xe_sriov_admin_bulk_set_exec_quantum_ms(pf_fd, 0);
 	igt_warn_on(ret_eq);
@@ -605,12 +619,6 @@ int __xe_sriov_admin_bulk_restore_sched_defaults(int pf_fd)
 	igt_warn_on(ret_pt);
 	if (!ret)
 		ret = ret_pt;
-
-	ret_prio = __xe_sriov_admin_bulk_set_sched_priority(pf_fd,
-							    XE_SRIOV_SCHED_PRIORITY_LOW);
-	igt_warn_on(ret_prio);
-	if (!ret)
-		ret = ret_prio;
 
 	return ret;
 }

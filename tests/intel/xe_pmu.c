@@ -1023,8 +1023,8 @@ static void unprovision_and_disable_vfs(int fd)
 {
 	int ret;
 
-	ret = __xe_sriov_admin_bulk_restore_sched_defaults(fd);
 	xe_sriov_disable_vfs_restore_auto_provisioning(fd);
+	ret = __xe_sriov_admin_bulk_restore_sched_defaults(fd);
 	/* abort to avoid execution of next tests with enabled VFs */
 	igt_abort_on_f(igt_sriov_get_enabled_vfs(fd) > 0,
 		       "Failed to disable VF(s)");

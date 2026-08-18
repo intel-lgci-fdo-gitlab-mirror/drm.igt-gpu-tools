@@ -136,6 +136,7 @@ static void test_spin(int fd, struct drm_xe_engine_class_instance *eci,
 #define RESET_SYNC_MODE			(0x1 << 16)
 #define MEM_PRESSURE_STRESS		(0x1 << 17)
 #define INVALIDATE_BO_STRESS		(0x1 << 18)
+#define RAPID_RESET_STRESS		(0x1 << 19)
 
 /**
  * SUBTEST: %s-cat-error
@@ -717,8 +718,10 @@ static void pressure_bo_destroy(int fd, uint32_t *bos, int count)
 
 static void do_resets(struct gt_thread_data *t)
 {
+	int interval_us = (t->flags & RAPID_RESET_STRESS) ? 1000 : 250000;
+
 	while (!*(t->exit)) {
-		usleep(250000);	/* 250 ms */
+		usleep(interval_us);
 		(*t->num_reset)++;
 		if (t->flags & RESET_SYNC_MODE)
 			xe_force_gt_reset_sync(t->fd, t->gt);
@@ -838,6 +841,10 @@ static void *gt_reset_thread(void *data)
  *
  * SUBTEST: gt-stress-reset-bo-invalidation
  * Description: Stress concurrent GT resets and job submissions while invalidating BO CPU mappings
+ * Test category: stress test
+ *
+ * SUBTEST: gt-stress-reset-rapid-cycle
+ * Description: Stress concurrent GT resets and job submissions with rapid-cycle resets
  * Test category: stress test
  *
  */
@@ -1061,6 +1068,7 @@ int igt_main()
 		{ "reset-concurrent-submit-sync", RESET_SYNC_MODE },
 		{ "reset-memory-pressure", MEM_PRESSURE_STRESS },
 		{ "reset-bo-invalidation", INVALIDATE_BO_STRESS },
+		{ "reset-rapid-cycle", RAPID_RESET_STRESS },
 		{ NULL },
 	};
 	int gt;

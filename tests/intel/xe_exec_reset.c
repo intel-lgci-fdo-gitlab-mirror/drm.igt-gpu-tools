@@ -139,6 +139,7 @@ static void test_spin(int fd, struct drm_xe_engine_class_instance *eci,
 #define RAPID_RESET_STRESS		(0x1 << 19)
 #define DESTROY_VM_CTX_STRESS		(0x1 << 20)
 #define MIXED_ENGINE_STRESS		(0x1 << 21)
+#define PM_TRANSITION_STRESS		(0x1 << 22)
 
 /**
  * SUBTEST: %s-cat-error
@@ -804,7 +805,11 @@ static void submit_jobs(struct gt_thread_data *t)
 		}
 
 		if (((t->flags & INVALIDATE_BO_STRESS) && !(i % 96)) ||
-		    ((t->flags & DESTROY_VM_CTX_STRESS) && !(i % 128))) {
+		    ((t->flags & DESTROY_VM_CTX_STRESS) && !(i % 128)) ||
+		     ((t->flags & PM_TRANSITION_STRESS) && !(i % 160))) {
+			if (t->flags & PM_TRANSITION_STRESS)
+				usleep(20000);
+
 			if (t->flags & MEM_PRESSURE_STRESS) {
 				pressure_bo_destroy(fd, pressure_bos, pressure_count);
 				pressure_count = 0;
@@ -876,6 +881,10 @@ static void *gt_reset_thread(void *data)
  *
  * SUBTEST: gt-stress-reset-mixed-engine-usage
  * Description: Stress concurrent GT resets and mixed-engine job submissions
+ * Test category: stress test
+ *
+ * SUBTEST: gt-stress-reset-pm-transition
+ * Description: Stress concurrent GT resets and job submissions during PM transition windows
  * Test category: stress test
  *
  */
@@ -1103,6 +1112,7 @@ int igt_main()
 		{ "reset-rapid-cycle", RAPID_RESET_STRESS },
 		{ "reset-destroy-vm-context", DESTROY_VM_CTX_STRESS },
 		{ "reset-mixed-engine-usage", MIXED_ENGINE_STRESS | RAPID_RESET_STRESS },
+		{ "reset-pm-transition", PM_TRANSITION_STRESS | DESTROY_VM_CTX_STRESS },
 		{ NULL },
 	};
 	int gt;

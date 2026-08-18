@@ -1470,7 +1470,7 @@ int igt_main_args("", long_opts, help_str, subm_opts_handler, NULL)
 		igt_require(igt_sriov_get_enabled_vfs(pf_fd) == 0);
 		igt_require(xe_sriov_admin_is_present(pf_fd));
 		igt_sriov_install_exit_handler(pf_fd,
-					       xe_sriov_admin_exit_cleanup_restore_defaults,
+					       xe_sriov_admin_exit_cleanup_restore_sched_defaults,
 					       NULL);
 		autoprobe = igt_sriov_is_driver_autoprobe_enabled(pf_fd);
 		xe_sriov_require_default_scheduling_attributes(pf_fd);

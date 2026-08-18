@@ -347,7 +347,7 @@ int igt_main()
 		igt_require(igt_sriov_get_enabled_vfs(pf_fd) == 0);
 		igt_require(xe_sriov_admin_is_present(pf_fd));
 		igt_sriov_install_exit_handler(pf_fd,
-					       xe_sriov_admin_exit_cleanup_restore_defaults,
+					       xe_sriov_admin_exit_cleanup_restore_sched_defaults,
 					       NULL);
 		total_vfs = igt_sriov_get_total_vfs(pf_fd);
 	}
@@ -426,7 +426,7 @@ int igt_main()
 	igt_fixture() {
 		int ret;
 
-		ret = __xe_sriov_admin_bulk_restore_defaults(pf_fd);
+		ret = __xe_sriov_admin_bulk_restore_sched_defaults(pf_fd);
 		igt_sriov_disable_vfs(pf_fd);
 		/* abort to avoid execution of next tests with enabled VFs */
 		igt_abort_on_f(igt_sriov_get_enabled_vfs(pf_fd) > 0,

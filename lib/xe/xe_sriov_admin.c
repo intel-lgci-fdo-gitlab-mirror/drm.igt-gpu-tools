@@ -541,7 +541,7 @@ void xe_sriov_admin_vf_stop(int pf_fd, unsigned int vf_num)
 }
 
 /**
- * __xe_sriov_admin_restore_defaults - Restore scheduling defaults for a VF
+ * __xe_sriov_admin_restore_sched_defaults - Restore scheduling defaults for a VF
  * @pf_fd:  PF device file descriptor.
  * @vf_num: VF index (0 for PF, >0 for VFs).
  *
@@ -549,7 +549,7 @@ void xe_sriov_admin_vf_stop(int pf_fd, unsigned int vf_num)
  *
  * Returns: 0 on success or negative errno on error.
  */
-int __xe_sriov_admin_restore_defaults(int pf_fd, unsigned int vf_num)
+int __xe_sriov_admin_restore_sched_defaults(int pf_fd, unsigned int vf_num)
 {
 	int ret_eq, ret_pt, ret_prio;
 	int ret = 0;
@@ -574,24 +574,24 @@ int __xe_sriov_admin_restore_defaults(int pf_fd, unsigned int vf_num)
 }
 
 /**
- * xe_sriov_admin_restore_defaults - Assert wrapper restoring VF defaults
+ * xe_sriov_admin_restore_sched_defaults - Assert wrapper restoring VF defaults
  * @pf_fd:  PF device file descriptor.
  * @vf_num: VF index (0 for PF, >0 for VFs).
  */
-void xe_sriov_admin_restore_defaults(int pf_fd, unsigned int vf_num)
+void xe_sriov_admin_restore_sched_defaults(int pf_fd, unsigned int vf_num)
 {
-	igt_assert_eq(0, __xe_sriov_admin_restore_defaults(pf_fd, vf_num));
+	igt_assert_eq(0, __xe_sriov_admin_restore_sched_defaults(pf_fd, vf_num));
 }
 
 /**
- * __xe_sriov_admin_bulk_restore_defaults - Restore scheduling defaults for PF and all VFs
+ * __xe_sriov_admin_bulk_restore_sched_defaults - Restore scheduling defaults for PF and all VFs
  * @pf_fd: PF device file descriptor.
  *
  * Resets PF and all VFs to driver default scheduling parameters.
  *
  * Returns: 0 on success or negative errno on error.
  */
-int __xe_sriov_admin_bulk_restore_defaults(int pf_fd)
+int __xe_sriov_admin_bulk_restore_sched_defaults(int pf_fd)
 {
 	int ret_eq, ret_pt, ret_prio;
 	int ret = 0;
@@ -616,16 +616,16 @@ int __xe_sriov_admin_bulk_restore_defaults(int pf_fd)
 }
 
 /**
- * xe_sriov_admin_bulk_restore_defaults - Assert wrapper for restoring defaults on PF and all VFs
+ * xe_sriov_admin_bulk_restore_sched_defaults - Assert wrapper restoring defaults on PF and all VFs
  * @pf_fd: PF device file descriptor.
  */
-void xe_sriov_admin_bulk_restore_defaults(int pf_fd)
+void xe_sriov_admin_bulk_restore_sched_defaults(int pf_fd)
 {
-	igt_assert_eq(0, __xe_sriov_admin_bulk_restore_defaults(pf_fd));
+	igt_assert_eq(0, __xe_sriov_admin_bulk_restore_sched_defaults(pf_fd));
 }
 
 /**
- * xe_sriov_admin_exit_cleanup_restore_defaults - Best-effort SR-IOV defaults restore callback
+ * xe_sriov_admin_exit_cleanup_restore_sched_defaults - Best-effort SR-IOV defaults restore callback
  * @pf_fd: PF device file descriptor
  * @sig: Exit signal number, or 0 on normal exit
  * @user_data: Unused
@@ -634,7 +634,7 @@ void xe_sriov_admin_bulk_restore_defaults(int pf_fd)
  * XE SR-IOV scheduling defaults. Restores PF and VF scheduling attributes to
  * driver defaults. Failures are ignored so the callback remains best-effort.
  */
-void xe_sriov_admin_exit_cleanup_restore_defaults(int pf_fd, int sig, void *user_data)
+void xe_sriov_admin_exit_cleanup_restore_sched_defaults(int pf_fd, int sig, void *user_data)
 {
 	(void)sig;
 	(void)user_data;
@@ -642,5 +642,5 @@ void xe_sriov_admin_exit_cleanup_restore_defaults(int pf_fd, int sig, void *user
 	if (!xe_sriov_admin_is_present(pf_fd))
 		return;
 
-	(void)__xe_sriov_admin_bulk_restore_defaults(pf_fd);
+	(void)__xe_sriov_admin_bulk_restore_sched_defaults(pf_fd);
 }

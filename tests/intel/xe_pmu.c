@@ -991,7 +991,7 @@ static unsigned int enable_and_provision_vfs(int fd)
 	igt_require(igt_sriov_get_enabled_vfs(fd) == 0);
 	xe_sriov_require_default_scheduling_attributes(fd);
 	igt_sriov_install_exit_handler(fd,
-				       xe_sriov_admin_exit_cleanup_restore_defaults,
+				       xe_sriov_admin_exit_cleanup_restore_sched_defaults,
 				       NULL);
 	autoprobe = igt_sriov_is_driver_autoprobe_enabled(fd);
 
@@ -1023,7 +1023,7 @@ static void unprovision_and_disable_vfs(int fd)
 {
 	int ret;
 
-	ret = __xe_sriov_admin_bulk_restore_defaults(fd);
+	ret = __xe_sriov_admin_bulk_restore_sched_defaults(fd);
 	xe_sriov_disable_vfs_restore_auto_provisioning(fd);
 	/* abort to avoid execution of next tests with enabled VFs */
 	igt_abort_on_f(igt_sriov_get_enabled_vfs(fd) > 0,

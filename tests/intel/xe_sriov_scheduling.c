@@ -1565,9 +1565,9 @@ int igt_main_args("", long_opts, help_str, subm_opts_handler, NULL)
 		}
 
 		igt_fixture() {
+			xe_sriov_disable_vfs_restore_auto_provisioning(pf_fd);
 			__set_vfs_scheduling_params(pf_fd, igt_sriov_get_total_vfs(pf_fd),
 						    &(struct vf_sched_params){});
-			xe_sriov_disable_vfs_restore_auto_provisioning(pf_fd);
 		}
 	}
 
@@ -1617,18 +1617,18 @@ int igt_main_args("", long_opts, help_str, subm_opts_handler, NULL)
 		}
 
 		igt_fixture() {
+			xe_sriov_disable_vfs_restore_auto_provisioning(pf_fd);
 			__set_vfs_scheduling_params(pf_fd, igt_sriov_get_total_vfs(pf_fd),
 						    &(struct vf_sched_params){});
-			xe_sriov_disable_vfs_restore_auto_provisioning(pf_fd);
 		}
 	}
 
 	igt_fixture() {
 		int ret;
 
+		xe_sriov_disable_vfs_restore_auto_provisioning(pf_fd);
 		ret = __set_vfs_scheduling_params(pf_fd, igt_sriov_get_total_vfs(pf_fd),
 						  &(struct vf_sched_params){});
-		xe_sriov_disable_vfs_restore_auto_provisioning(pf_fd);
 		/* abort to avoid execution of next tests with enabled VFs */
 		igt_abort_on_f(igt_sriov_get_enabled_vfs(pf_fd) > 0,
 			       "Failed to disable VF(s)");

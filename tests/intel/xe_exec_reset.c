@@ -132,6 +132,7 @@ static void test_spin(int fd, struct drm_xe_engine_class_instance *eci,
 #define COMPRESSION			(0x1 << 13)
 #define MULTI_QUEUE			(0x1 << 14)
 #define SECONDARY_QUEUE			(0x1 << 15)
+#define RESET_SYNC_MODE			(0x1 << 16)
 
 /**
  * SUBTEST: %s-cat-error
@@ -661,7 +662,10 @@ static void do_resets(struct gt_thread_data *t)
 	while (!*(t->exit)) {
 		usleep(250000);	/* 250 ms */
 		(*t->num_reset)++;
-		xe_force_gt_reset_async(t->fd, t->gt);
+		if (t->flags & RESET_SYNC_MODE)
+			xe_force_gt_reset_sync(t->fd, t->gt);
+		else
+			xe_force_gt_reset_async(t->fd, t->gt);
 	}
 }
 
@@ -734,6 +738,10 @@ static void *gt_reset_thread(void *data)
  *
  * SUBTEST: gt-stress-reset-concurrent-submit
  * Description: Stress concurrent GT resets and job submissions
+ * Test category: stress test
+ *
+ * SUBTEST: gt-stress-reset-concurrent-submit-sync
+ * Description: Stress concurrent GT resets and job submissions with sync resets
  * Test category: stress test
  *
  */
@@ -953,6 +961,7 @@ int igt_main()
 	};
 	const struct section ssections[] = {
 		{ "reset-concurrent-submit", 0 },
+		{ "reset-concurrent-submit-sync", RESET_SYNC_MODE },
 		{ NULL },
 	};
 	int gt;
@@ -1151,7 +1160,7 @@ int igt_main()
 
 	for (const struct section *s = ssections; s->name; s++) {
 		igt_subtest_f("gt-stress-%s", s->name)
-			gt_reset(fd, 0, 8, 2, 0);
+			gt_reset(fd, 0, 8, 2, s->flags);
 	}
 
 	igt_subtest("gt-mocs-reset")

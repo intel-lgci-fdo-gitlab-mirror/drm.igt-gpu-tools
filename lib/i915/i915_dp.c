@@ -334,7 +334,7 @@ void i915_dp_reset_link_params(int drm_fd, igt_output_t *output)
  * to set link rate and lane count to auto on exit
  */
 void i915_dp_set_link_params(int drm_fd, igt_output_t *output,
-			     char *link_rate, char *lane_count)
+			     const char *link_rate, const char *lane_count)
 {
 	bool valid;
 	drmModeConnector *temp;
@@ -389,4 +389,60 @@ int i915_dp_get_max_supported_rate(int drm_fd, const igt_output_t *output)
 	}
 
 	return max_rate;
+}
+
+/**
+ * i915_dp_get_next_lower_rate:
+ * @drm_fd: A drm file descriptor
+ * @output: Target output
+ * @rate: reference link rate in 10 kbit/s units
+ *
+ * Parse the intel_dp_allowed_link_configs debugfs file and return the highest
+ * allowed link rate strictly below @rate.
+ *
+ * This file lists the configurations the driver would actually pick from, i.e.
+ * the intersection of the source rates, the rates the sink advertises and the
+ * current link limits, as "<lanes>x<rate>" entries. The i915_dp_force_link_rate
+ * list is only the source rates: writing a rate from it that the sink never
+ * advertised still succeeds and the kernel silently clamps the effective rate
+ * down, so the caller would report a rate the link was never trained at.
+ *
+ * Returns: highest allowed rate below @rate in 10 kbit/s units, or 0 if none.
+ */
+int i915_dp_get_next_lower_rate(int drm_fd, igt_output_t *output, int rate)
+{
+	char buf[4096];
+	const char *p;
+	int res, next = 0;
+
+	res = igt_debugfs_read_connector_file(drm_fd, igt_output_name(output),
+					      "intel_dp_allowed_link_configs",
+					      buf, sizeof(buf));
+	igt_assert_f(res == 0,
+		     "Unable to read %s/intel_dp_allowed_link_configs\n",
+		     igt_output_name(output));
+
+	/*
+	 * Entries are "<lanes>x<rate>". Key off the 'x' separator rather than
+	 * tokenising the whole file, so the header and any decoration around
+	 * the list are skipped without having to model them.
+	 */
+	for (p = buf; (p = strchr(p, 'x')); p++) {
+		char *endptr;
+		long r;
+
+		/* Must be preceded by the lane count to be a config entry. */
+		if (p == buf || !isdigit((unsigned char)p[-1]))
+			continue;
+
+		errno = 0;
+		r = strtol(p + 1, &endptr, 10);
+		if (errno || endptr == p + 1)
+			continue;
+
+		if (r < rate && r > next)
+			next = (int)r;
+	}
+
+	return next;
 }

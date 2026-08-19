@@ -1395,6 +1395,9 @@ madvise_prefetch_op(int fd, uint32_t vm, uint64_t addr, size_t bo_size,
 
 		xe_vm_madvise_migrate_pages(fd, vm, to_user_pointer(data), bo_size / 2);
 
+		/* free 1st allocation in mem_attrs */
+		free(mem_attrs);
+
 		mem_attrs = xe_vm_get_mem_attr_values_in_range(fd, vm, addr, bo_size, &num_ranges);
 		if (!mem_attrs) {
 			igt_info("Failed to get memory attributes\n");
@@ -1426,13 +1429,14 @@ madvise_prefetch_op(int fd, uint32_t vm, uint64_t addr, size_t bo_size,
 		if (!mem_attrs) {
 			igt_info("Failed to get memory attributes\n");
 			return;
+		}
 
 		xe_vm_prefetch_async(fd, vm, 0, 0, addr, bo_size, NULL, 0,
 				     DRM_XE_CONSULT_MEM_ADVISE_PREF_LOC);
 
 		xe_vm_madvise_atomic_attr(fd, vm, to_user_pointer(data), bo_size,
 					  DRM_XE_ATOMIC_DEVICE);
-		}
+
 		free(mem_attrs);
 	}
 }

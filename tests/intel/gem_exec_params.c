@@ -85,6 +85,8 @@
  *
  * SUBTEST: invalid-flag
  *
+ * SUBTEST: invalid-offset-multiple-buffers
+ *
  * SUBTEST: invalid-ring
  *
  * SUBTEST: invalid-ring2
@@ -404,6 +406,51 @@ static void test_invalid_batch_start(int fd)
 	gem_close(fd, exec.handle);
 }
 
+/*
+ * This test is checking for a NULL deref in eb_release_vmas()
+ * (see 4fe2bd195435 for kernel fix), which happens when multiple buffers
+ * are submitted to the execbuf ioctl and some of them are invalid.
+ *
+ * The __gem_execbuf() call is always expected to fail with an -EINVAL,
+ * because the bug mentioned above is in the error path, which is
+ * deliberately triggered. Affected systems, however, will not handle it
+ * cleanly and will crash with a NULL deref.
+ */
+
+static void test_invalid_offset_multiple_buffers(int fd)
+{
+	struct drm_i915_gem_exec_object2 exec[2];
+	struct drm_i915_gem_execbuffer2 execbuf;
+	uint32_t size = 0x1000;
+
+	memset(exec, 0, sizeof(exec));
+	memset(&execbuf, 0, sizeof(execbuf));
+
+	exec[0].handle = batch_create_size(fd, size);
+	exec[1].handle = batch_create_size(fd, size);
+
+	/*
+	 * To test 4fe2bd195435, we need multiple buffers submitted and
+	 * eb_add_vma() to fail. eb_add_vma() checks whether
+	 * batch_start_offset + batch_len is smaller than the vma size, and
+	 * fails with -EINVAL if it isn't. Submitting two buffers and setting
+	 * the offset to the size of the first batch will trigger this
+	 * error path.
+	 */
+
+	execbuf.buffers_ptr = to_user_pointer(exec);
+	execbuf.buffer_count = 2;
+	execbuf.batch_start_offset = size;
+
+	igt_assert_eq(__gem_execbuf(fd, &execbuf), -EINVAL);
+
+	gem_sync(fd, exec[0].handle);
+	gem_sync(fd, exec[1].handle);
+
+	gem_close(fd, exec[0].handle);
+	gem_close(fd, exec[1].handle);
+}
+
 static void test_larger_than_life_batch(int fd)
 {
 	const struct intel_execution_engine2 *e;
@@ -704,6 +751,9 @@ int igt_main()
 
 	igt_subtest("larger-than-life-batch")
 		test_larger_than_life_batch(fd);
+
+	igt_subtest("invalid-offset-multiple-buffers")
+		test_invalid_offset_multiple_buffers(fd);
 
 #define DIRT(name) \
 	igt_subtest(#name "-dirt") { \

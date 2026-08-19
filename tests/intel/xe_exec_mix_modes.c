@@ -27,6 +27,7 @@
 
 #define FLAG_EXEC_MODE_LR	(0x1 << 0)
 #define FLAG_JOB_TYPE_SIMPLE	(0x1 << 1)
+#define FLAG_MULTI_QUEUE	(0x1 << 2)
 
 #define NUM_INTERRUPTING_JOBS	1
 #define USER_FENCE_VALUE	0xdeadbeefdeadbeefull
@@ -34,6 +35,7 @@
 #define SPIN_DATA		1
 #define EXEC_DATA		2
 #define DATA_COUNT		3
+#define N_GROUP_QUEUES		2
 
 struct data {
 	struct xe_spin spin;
@@ -221,6 +223,92 @@ run_job(int fd, struct drm_xe_engine_class_instance *hwe,
 	xe_vm_destroy(fd, vm);
 }
 
+static void
+run_job_multi_queue(int fd, struct drm_xe_engine_class_instance *hwe)
+{
+	struct drm_xe_sync sync = {
+		.flags = DRM_XE_SYNC_FLAG_SIGNAL,
+		.type = DRM_XE_SYNC_TYPE_USER_FENCE,
+		.timeline_value = USER_FENCE_VALUE,
+	};
+	struct drm_xe_exec exec = {
+		.num_batch_buffer = 1,
+		.num_syncs = 1,
+		.syncs = to_user_pointer(&sync),
+	};
+	uint32_t exec_queues[N_GROUP_QUEUES];
+	struct xe_spin *spin[N_GROUP_QUEUES];
+	uint64_t addr[N_GROUP_QUEUES];
+	uint64_t base_addr = 0x1a0000;
+	int64_t fence_timeout = NSEC_PER_SEC;
+	uint64_t vm_sync = 0;
+	size_t bo_size, spin_size;
+	uint32_t vm, bo;
+	void *map;
+	int i;
+
+	vm = xe_vm_create(fd, DRM_XE_VM_CREATE_FLAG_LR_MODE |
+			      DRM_XE_VM_CREATE_FLAG_FAULT_MODE, 0);
+
+	/* exec_queues[0] is the primary, the rest join its group. */
+	for (i = 0; i < N_GROUP_QUEUES; i++) {
+		struct drm_xe_ext_set_property multi_queue = {
+			.base.name = DRM_XE_EXEC_QUEUE_EXTENSION_SET_PROPERTY,
+			.property = DRM_XE_EXEC_QUEUE_SET_PROPERTY_MULTI_GROUP,
+		};
+		uint64_t ext = to_user_pointer(&multi_queue);
+
+		multi_queue.value = i ? exec_queues[0] : DRM_XE_MULTI_GROUP_CREATE;
+		exec_queues[i] = xe_exec_queue_create(fd, vm, hwe, ext);
+	}
+
+	spin_size = xe_bb_size(fd, sizeof(struct xe_spin));
+	bo_size = spin_size * N_GROUP_QUEUES;
+	bo = xe_bo_create(fd, vm, bo_size, vram_if_possible(fd, hwe->gt_id),
+			  DRM_XE_GEM_CREATE_FLAG_NEEDS_VISIBLE_VRAM);
+	map = xe_bo_map(fd, bo, bo_size);
+	for (i = 0; i < N_GROUP_QUEUES; i++) {
+		spin[i] = (struct xe_spin *)((char *)map + i * spin_size);
+		addr[i] = base_addr + i * spin_size;
+	}
+
+	sync.addr = to_user_pointer(&vm_sync);
+	xe_vm_bind_async(fd, vm, 0, bo, 0, base_addr, bo_size, &sync, 1);
+	xe_wait_ufence(fd, &vm_sync, USER_FENCE_VALUE, 0, fence_timeout);
+	vm_sync = 0;
+
+	for (i = 0; i < N_GROUP_QUEUES; i++) {
+		/* Yield the shared engine at a switch point instead of busy-spinning. */
+		xe_spin_init_opts(spin[i], .addr = addr[i], .preempt = true,
+				  .multi_queue_switch = true);
+		sync.addr = addr[i] + (char *)&spin[i]->exec_sync - (char *)spin[i];
+		exec.exec_queue_id = exec_queues[i];
+		exec.address = addr[i];
+		xe_exec(fd, &exec);
+		xe_spin_wait_started(spin[i]);
+	}
+
+	/* Force the group from FAULT into DMA_FENCE mode. */
+	run_job(fd, hwe, EXEC_MODE_DMA_FENCE, SIMPLE_BATCH_STORE, false, NULL);
+
+	for (i = 0; i < N_GROUP_QUEUES; i++)
+		xe_spin_end(spin[i]);
+
+	for (i = 0; i < N_GROUP_QUEUES; i++)
+		xe_wait_ufence(fd, &spin[i]->exec_sync, USER_FENCE_VALUE,
+			       exec_queues[i], fence_timeout);
+
+	sync.addr = to_user_pointer(&vm_sync);
+	xe_vm_unbind_async(fd, vm, 0, 0, base_addr, bo_size, &sync, 1);
+	xe_wait_ufence(fd, &vm_sync, USER_FENCE_VALUE, 0, fence_timeout);
+
+	for (i = 0; i < N_GROUP_QUEUES; i++)
+		xe_exec_queue_destroy(fd, exec_queues[i]);
+	munmap(map, bo_size);
+	gem_close(fd, bo);
+	xe_vm_destroy(fd, vm);
+}
+
 /**
  * SUBTEST: exec-simple-batch-store-lr
  * Description: Execute a simple batch store job in long running mode
@@ -235,6 +323,11 @@ run_job(int fd, struct drm_xe_engine_class_instance *hwe,
  * SUBTEST: exec-spinner-interrupted-dma-fence
  * Description: Spin in dma fence mode then get interrupted by a simple
  *              batch store job in long running mode
+ *
+ * SUBTEST: exec-multi-queue-spinner-interrupted-lr
+ * Description: Run preemptible spinners on a multi-queue exec queue group
+ *              in long running mode, then get interrupted by a simple
+ *              batch store job in dma fence mode
  */
 static void
 test_exec(int fd, struct drm_xe_engine_class_instance *hwe,
@@ -242,6 +335,13 @@ test_exec(int fd, struct drm_xe_engine_class_instance *hwe,
 {
 	enum engine_execution_mode engine_execution_mode;
 	enum job_type job_type;
+
+	if (flags & FLAG_MULTI_QUEUE) {
+		igt_assert(flags & FLAG_EXEC_MODE_LR);
+		igt_require(xe_engine_class_supports_multi_queue(fd, hwe->engine_class));
+		run_job_multi_queue(fd, hwe);
+		return;
+	}
 
 	if (flags & FLAG_EXEC_MODE_LR)
 		engine_execution_mode = EXEC_MODE_LR;
@@ -267,6 +367,7 @@ int igt_main()
 		{ "simple-batch-store-dma-fence", FLAG_JOB_TYPE_SIMPLE },
 		{ "spinner-interrupted-lr", FLAG_EXEC_MODE_LR },
 		{ "spinner-interrupted-dma-fence", 0 },
+		{ "multi-queue-spinner-interrupted-lr", FLAG_EXEC_MODE_LR | FLAG_MULTI_QUEUE },
 		{ NULL },
 	};
 	int fd;

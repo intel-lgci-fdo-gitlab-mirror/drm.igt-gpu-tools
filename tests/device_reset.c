@@ -453,23 +453,24 @@ int igt_main()
 		/* Make sure subtests always reopen the same device */
 		igt_assert(device_sysfs_path(dev.fds.dev, dev_path));
 		set_device_filter(dev_path);
-
-		igt_skip_on(!is_sysfs_reset_supported(dev.fds.dev));
 	}
 
 	igt_describe("Unbinds driver from device, initiates reset"
 		     " then rebinds driver to device");
 	igt_subtest("unbind-reset-rebind") {
+		igt_skip_on(!is_sysfs_reset_supported(dev.fds.dev));
+
 		unbind_reset_rebind(&dev, FLR_RESET);
 		healthcheck(&dev);
 	}
 
 	igt_describe("Resets device with bound driver");
 	igt_subtest("reset-bound") {
+		igt_skip_on(!is_sysfs_reset_supported(dev.fds.dev));
+
 		initiate_device_reset(&dev, FLR_RESET);
 		healthcheck(&dev);
 	}
-
 
 	igt_subtest_group() {
 		igt_describe("Unbinds driver from device, initiates cold reset"

@@ -431,6 +431,13 @@ static bool run_lt_fallback_test(data_t *data)
 	bool ran = false;
 	igt_output_t *output;
 
+	/*
+	 * Reset per invocation so MST traversal state from a previous subtest
+	 * (e.g. dp-fallback followed by dsc-fallback) doesn't leak and cause
+	 * MST siblings to be silently skipped as "already visited".
+	 */
+	traversed_mst_output_count = 0;
+
 	for_each_connected_output(&data->display, output) {
 		data->output = output;
 

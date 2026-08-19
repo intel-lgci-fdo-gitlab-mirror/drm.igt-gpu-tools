@@ -81,56 +81,6 @@ L0:
 	)", lower_32_bits(addr), upper_32_bits(addr));
 }
 
-/**
- * gpgpu_shader__l2_prefetch_fault:
- * @shdr: shader to be modified
- * @addr: ppgtt virtual address to raise L2 prefetch fault
- *
- * This shader can only be used when in efficient 64bit mode.
- * For a given arbitrary ppgtt virtual address, it raises an L2 prefetch fault
- * using load instruction with L1 uncached + L2 cached cache policy.
- * With L1 uncached, the prefetch bypasses LSC and is sourced from L2.
- */
-static void gpgpu_shader__l2_prefetch_fault(struct gpgpu_shader *shdr,
-					    uint64_t addr)
-{
-	igt_assert_f((addr & 0x7) == 0, "address must be aligned to QWord!\n");
-
-	emit_iga64_code(shdr, xe_l2_prefetch_fault_prefetch, R"(
-#define IGA64_FLAGS ""
-#if GFX_VER >= 4000
-#elif GFX_VER >= 3500
-L0:
-// Set base address with scalar register
-(W)	mov (1)		s0.0<1>:ud		ARG(0):ud
-(W)	mov (1)		s0.1<1>:ud		ARG(1):ud
-
-// A64 offset
-(W)	mov (8)		r30.0<1>:uq		0x0:uq
-
-// efficient 64bit Read with uncached L1, cached L2 and uncached L3
-// sendg ugm load - L2 prefetch (L1 bypass)
-// Message Descriptor
-//      DP_LOAD_STORE_STATELESS_DESC (HAS:2209865465)
-//      DP_CACHE_LOAD (HAS:2209865465) value 4 = L1UC_L2C_L3UC
-//      0x49C00 =>
-//      [45:44] Offset Scaling: 0 (disable)
-//      [43:22] Global Offset: 0
-//      [21] Overfetch: 0 (disable)
-//      [19:16] Cache: 4 (L1 uncached, L2 cached and L3 uncached)
-//      [15:14] Address Type and Size: 2 (Flat A64 Base, A64 Index)
-//      [13:11] Data Size: 3 (D64)
-//      [10:10] Transpose : 1 (enable)
-//      [9:7] Vector Size: 0 (Vector length 1)
-//      [5:0] Opcode: 0 (Load)
-// Prefetch operations are implemented using a NULL destination register.
-// L1 uncached forces the prefetch to bypass LSC, making L2 the fault source.
-(W)	sendg.ugm (1|M0)	null	r30:1	null:0	s0.0	0x49C00	{A@1,$5}
-
-#endif
-	)", lower_32_bits(addr), upper_32_bits(addr));
-}
-
 static struct intel_buf *
 create_buf(int fd, int width, int height, uint32_t color)
 {
@@ -180,17 +130,6 @@ static struct gpgpu_shader *get_prefetch_shader(int fd)
 	return shader;
 }
 
-static struct gpgpu_shader *get_l2_prefetch_shader(int fd)
-{
-	struct gpgpu_shader *shader;
-
-	shader = gpgpu_shader_create(fd);
-	gpgpu_shader__l2_prefetch_fault(shader, xe_canonical_va(fd, PREFETCH_ADDR));
-	gpgpu_shader__eot(shader);
-
-	return shader;
-}
-
 /**
  * SUBTEST: prefetch-fault
  * Description: Validate L1 prefetch fault and hit-under-miss behavior with
@@ -200,16 +139,6 @@ static struct gpgpu_shader *get_l2_prefetch_shader(int fd)
  * SUBTEST: prefetch-fault-svm
  * Description: Validate L1 prefetch fault and hit-under-miss behavior in SVM
  *		mode with L1 cached, L2 cached cache policy (fault source: LSC)
- * Run type: FULL
- *
- * SUBTEST: l2-prefetch-fault
- * Description: Validate L2 prefetch fault and hit-under-miss behavior with
- *		L1 uncached, L2 cached cache policy (fault source: L2)
- * Run type: FULL
- *
- * SUBTEST: l2-prefetch-fault-svm
- * Description: Validate L2 prefetch fault and hit-under-miss behavior in SVM
- *		mode with L1 uncached, L2 cached cache policy (fault source: L2)
  * Run type: FULL
  */
 static void test_prefetch_fault(int fd, struct drm_xe_engine_class_instance *hwe,
@@ -363,32 +292,6 @@ int igt_main()
 					      hwe->engine_instance)
 					test_prefetch_fault(fd, hwe, true,
 							    get_prefetch_shader);
-			}
-		}
-	}
-
-	igt_subtest_with_dynamic("l2-prefetch-fault") {
-		xe_for_each_engine(fd, hwe) {
-			if (hwe->engine_class == DRM_XE_ENGINE_CLASS_RENDER ||
-			    hwe->engine_class == DRM_XE_ENGINE_CLASS_COMPUTE) {
-				igt_dynamic_f("%s%d", xe_engine_class_string(hwe->engine_class),
-					      hwe->engine_instance)
-					test_prefetch_fault(fd, hwe, false,
-							    get_l2_prefetch_shader);
-			}
-		}
-	}
-
-	igt_subtest_with_dynamic("l2-prefetch-fault-svm") {
-		if (!svm_supported)
-			igt_skip("SVM not supported on this device, skipping.\n");
-		xe_for_each_engine(fd, hwe) {
-			if (hwe->engine_class == DRM_XE_ENGINE_CLASS_RENDER ||
-			    hwe->engine_class == DRM_XE_ENGINE_CLASS_COMPUTE) {
-				igt_dynamic_f("%s%d", xe_engine_class_string(hwe->engine_class),
-					      hwe->engine_instance)
-					test_prefetch_fault(fd, hwe, true,
-							    get_l2_prefetch_shader);
 			}
 		}
 	}

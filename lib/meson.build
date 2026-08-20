@@ -39,6 +39,7 @@ lib_sources = [
 	'igt_perf.c',
 	'igt_rc.c',
 	'igt_pipe_crc.c',
+	'igt_platform_filter.c',
 	'igt_power.c',
 	'igt_primes.c',
 	'igt_pci.c',

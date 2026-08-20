@@ -463,7 +463,8 @@ inject_fault_probe(int fd, const char pci_slot[], const char function_name[],
 	injection_list_add(function_name);
 	set_retval(function_name, inject_error);
 
-	igt_assert(igt_sysfs_set(devicefd, "reset", "1"));
+	if (!igt_debug_on(!igt_sysfs_has_attr(devicefd, "reset")))
+		igt_assert(igt_sysfs_set(devicefd, "reset", "1"));
 	igt_kmod_bind("i915", pci_slot);
 
 	err = -errno;

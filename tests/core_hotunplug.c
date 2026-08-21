@@ -80,6 +80,34 @@
  * SUBTEST: unplug-rescan
  * Description: Check if a device believed to be closed can be cleanly
  *		unplugged, then restored
+ *
+ * SUBTEST: hotunbind-rebind-with-load
+ * Description: Check if the driver can be cleanly unbound from an open device
+ *		with a background GPU workload in flight, then released and
+ *		rebound
+ *
+ * SUBTEST: hotunplug-rescan-with-load
+ * Description: Check if an open device with a background GPU workload in
+ *		flight can be cleanly unplugged, then released and restored
+ *
+ * SUBTEST: hotrebind-with-load
+ * Description: Check if the driver can be cleanly rebound to a device with a
+ *		still open hot unbound driver instance while a background GPU
+ *		workload is in flight
+ *
+ * SUBTEST: hotreplug-with-load
+ * Description: Check if a hot unplugged and still open device can be cleanly
+ *		restored while a background GPU workload is in flight
+ *
+ * SUBTEST: hotrebind-lateclose-with-load
+ * Description: Check if a hot unbound driver instance still open after hot
+ *		rebind with a background GPU workload in flight can be cleanly
+ *		released
+ *
+ * SUBTEST: hotreplug-lateclose-with-load
+ * Description: Check if an instance of a still open while hot replugged
+ *		device with a background GPU workload in flight can be cleanly
+ *		released
  */
 
 IGT_TEST_DESCRIPTION("Examine behavior of a driver on device hot unplug");
@@ -550,6 +578,56 @@ static void post_healthcheck(struct hotunplug *priv)
 	cleanup(priv);
 }
 
+/* GPU workload helpers */
+
+struct gpu_workload {
+	union {
+		struct {
+			igt_spin_t *spin;
+			uint64_t ahnd;
+		} intel; /* Xe and i915 */
+	};
+};
+
+static bool workload_available(int chipset)
+{
+	return chipset == DRIVER_XE || chipset == DRIVER_INTEL;
+}
+
+static void workload_start(struct hotunplug *priv, int fd,
+			   struct gpu_workload *w)
+{
+	if (priv->chipset == DRIVER_XE || priv->chipset == DRIVER_INTEL) {
+		local_debug("%s\n", "starting GPU spinner");
+		priv->failure = "GPU workload start failure!";
+		w->intel.ahnd = intel_allocator_open(fd, 0, INTEL_ALLOCATOR_RELOC);
+		w->intel.spin = igt_spin_new(fd, .ahnd = w->intel.ahnd);
+		priv->failure = NULL;
+	}
+}
+
+static void workload_stop(struct hotunplug *priv, struct gpu_workload *w)
+{
+	if (priv->chipset == DRIVER_XE || priv->chipset == DRIVER_INTEL) {
+		if (!w->intel.spin)
+			return;
+
+		/*
+		 * The device may be gone (unbind/unplug), so avoid
+		 * igt_spin_free(): on Xe it would wait forever on a syncobj
+		 * that never signals; on i915 it would touch the dead fd via
+		 * gem_munmap()/gem_close(). Instead, end the spinner via a
+		 * userspace mmap write and let the DRM fd close reclaim the
+		 * kernel-side resources.
+		 */
+		local_debug("%s\n", "stopping GPU spinner");
+		igt_spin_end(w->intel.spin);
+		put_ahnd(w->intel.ahnd);
+		w->intel.spin = NULL;
+		w->intel.ahnd = 0;
+	}
+}
+
 /* Subtests */
 
 static void unbind_rebind(struct hotunplug *priv)
@@ -657,6 +735,150 @@ static void hotreplug_lateclose(struct hotunplug *priv)
 	device_unplug(priv, "hot ", 60);
 
 	bus_rescan(priv, 0);
+
+	priv->fd.drm = close_device(priv->fd.drm, "late ", "removed ");
+	igt_assert_eq(priv->fd.drm, -1);
+
+	igt_assert_f(healthcheck(priv, false), "%s\n", priv->failure);
+}
+
+static void hotunbind_rebind_with_load(struct hotunplug *priv)
+{
+	struct gpu_workload w = { 0 };
+
+	pre_check(priv);
+
+	igt_require_f(workload_available(priv->chipset),
+		      "No GPU workload support for this driver\n");
+
+	priv->fd.drm = local_drm_open_driver(false, "", " for hot unbind");
+
+	workload_start(priv, priv->fd.drm, &w);
+
+	driver_unbind(priv, "hot ", 0);
+
+	workload_stop(priv, &w);
+
+	priv->fd.drm = close_device(priv->fd.drm, "late ", "unbound ");
+	igt_assert_eq(priv->fd.drm, -1);
+
+	driver_bind(priv, 0);
+
+	igt_assert_f(healthcheck(priv, false), "%s\n", priv->failure);
+}
+
+static void hotunplug_rescan_with_load(struct hotunplug *priv)
+{
+	struct gpu_workload w = { 0 };
+
+	pre_check(priv);
+
+	igt_require_f(workload_available(priv->chipset),
+		      "No GPU workload support for this driver\n");
+
+	priv->fd.drm = local_drm_open_driver(false, "", " for hot unplug");
+
+	workload_start(priv, priv->fd.drm, &w);
+
+	device_unplug(priv, "hot ", 0);
+
+	workload_stop(priv, &w);
+
+	priv->fd.drm = close_device(priv->fd.drm, "late ", "removed ");
+	igt_assert_eq(priv->fd.drm, -1);
+
+	bus_rescan(priv, 0);
+
+	igt_assert_f(healthcheck(priv, false), "%s\n", priv->failure);
+}
+
+static void hotrebind_with_load(struct hotunplug *priv)
+{
+	struct gpu_workload w = { 0 };
+
+	pre_check(priv);
+
+	igt_require_f(workload_available(priv->chipset),
+		      "No GPU workload support for this driver\n");
+
+	priv->fd.drm = local_drm_open_driver(false, "", " for hot rebind");
+
+	workload_start(priv, priv->fd.drm, &w);
+
+	driver_unbind(priv, "hot ", 60);
+
+	driver_bind(priv, 0);
+
+	workload_stop(priv, &w);
+
+	igt_assert_f(healthcheck(priv, false), "%s\n", priv->failure);
+}
+
+static void hotreplug_with_load(struct hotunplug *priv)
+{
+	struct gpu_workload w = { 0 };
+
+	pre_check(priv);
+
+	igt_require_f(workload_available(priv->chipset),
+		      "No GPU workload support for this driver\n");
+
+	priv->fd.drm = local_drm_open_driver(false, "", " for hot replug");
+
+	workload_start(priv, priv->fd.drm, &w);
+
+	device_unplug(priv, "hot ", 60);
+
+	bus_rescan(priv, 0);
+
+	workload_stop(priv, &w);
+
+	igt_assert_f(healthcheck(priv, false), "%s\n", priv->failure);
+}
+
+static void hotrebind_lateclose_with_load(struct hotunplug *priv)
+{
+	struct gpu_workload w = { 0 };
+
+	pre_check(priv);
+
+	igt_require_f(workload_available(priv->chipset),
+		      "No GPU workload support for this driver\n");
+
+	priv->fd.drm = local_drm_open_driver(false, "", " for hot rebind");
+
+	workload_start(priv, priv->fd.drm, &w);
+
+	driver_unbind(priv, "hot ", 60);
+
+	driver_bind(priv, 0);
+
+	workload_stop(priv, &w);
+
+	priv->fd.drm = close_device(priv->fd.drm, "late ", "unbound ");
+	igt_assert_eq(priv->fd.drm, -1);
+
+	igt_assert_f(healthcheck(priv, false), "%s\n", priv->failure);
+}
+
+static void hotreplug_lateclose_with_load(struct hotunplug *priv)
+{
+	struct gpu_workload w = { 0 };
+
+	pre_check(priv);
+
+	igt_require_f(workload_available(priv->chipset),
+		      "No GPU workload support for this driver\n");
+
+	priv->fd.drm = local_drm_open_driver(false, "", " for hot replug");
+
+	workload_start(priv, priv->fd.drm, &w);
+
+	device_unplug(priv, "hot ", 60);
+
+	bus_rescan(priv, 0);
+
+	workload_stop(priv, &w);
 
 	priv->fd.drm = close_device(priv->fd.drm, "late ", "removed ");
 	igt_assert_eq(priv->fd.drm, -1);
@@ -797,6 +1019,78 @@ int igt_main()
 		igt_describe("Check if an instance of a still open while hot replugged device can be cleanly released");
 		igt_subtest("hotreplug-lateclose")
 			hotreplug_lateclose(&priv);
+
+		igt_fixture()
+			recover(&priv);
+	}
+
+	igt_fixture()
+		post_healthcheck(&priv);
+
+	igt_subtest_group() {
+		igt_describe("Check if the driver can be cleanly unbound from an open device with a background GPU workload in flight, then released and rebound");
+		igt_subtest("hotunbind-rebind-with-load")
+			hotunbind_rebind_with_load(&priv);
+
+		igt_fixture()
+			recover(&priv);
+	}
+
+	igt_fixture()
+		post_healthcheck(&priv);
+
+	igt_subtest_group() {
+		igt_describe("Check if an open device with a background GPU workload in flight can be cleanly unplugged, then released and restored");
+		igt_subtest("hotunplug-rescan-with-load")
+			hotunplug_rescan_with_load(&priv);
+
+		igt_fixture()
+			recover(&priv);
+	}
+
+	igt_fixture()
+		post_healthcheck(&priv);
+
+	igt_subtest_group() {
+		igt_describe("Check if the driver can be cleanly rebound to a device with a still open hot unbound driver instance while a background GPU workload is in flight");
+		igt_subtest("hotrebind-with-load")
+			hotrebind_with_load(&priv);
+
+		igt_fixture()
+			recover(&priv);
+	}
+
+	igt_fixture()
+		post_healthcheck(&priv);
+
+	igt_subtest_group() {
+		igt_describe("Check if a hot unplugged and still open device can be cleanly restored while a background GPU workload is in flight");
+		igt_subtest("hotreplug-with-load")
+			hotreplug_with_load(&priv);
+
+		igt_fixture()
+			recover(&priv);
+	}
+
+	igt_fixture()
+		post_healthcheck(&priv);
+
+	igt_subtest_group() {
+		igt_describe("Check if a hot unbound driver instance still open after hot rebind with a background GPU workload in flight can be cleanly released");
+		igt_subtest("hotrebind-lateclose-with-load")
+			hotrebind_lateclose_with_load(&priv);
+
+		igt_fixture()
+			recover(&priv);
+	}
+
+	igt_fixture()
+		post_healthcheck(&priv);
+
+	igt_subtest_group() {
+		igt_describe("Check if an instance of a still open while hot replugged device with a background GPU workload in flight can be cleanly released");
+		igt_subtest("hotreplug-lateclose-with-load")
+			hotreplug_lateclose_with_load(&priv);
 
 		igt_fixture()
 			recover(&priv);

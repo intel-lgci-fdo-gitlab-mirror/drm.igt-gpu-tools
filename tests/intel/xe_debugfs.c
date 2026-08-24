@@ -581,8 +581,12 @@ static void check_gt_reg_sr(int fd, int gt)
 
 	debugfs_fd = igt_debugfs_gt_open(fd, gt, "register-save-restore-check",
 					 O_RDONLY);
-	igt_require(debugfs_fd);
+	igt_require(debugfs_fd >= 0);
 	file = fdopen(debugfs_fd, "r");
+	if (!file) {
+		close(debugfs_fd);
+		igt_skip("Failed to fdopen register-save-restore-check\n");
+	}
 	while (fgets(buf, sizeof(buf), file) != NULL) {
 		unsigned long offset = strtoul(buf, NULL, 16);
 		bool ok = false;

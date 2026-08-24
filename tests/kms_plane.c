@@ -41,31 +41,9 @@
 #include "xe/xe_query.h"
 
 /**
- * SUBTEST: planar-pixel-format-settings@nv12-odd-width
- * Description: Verify odd-width (257px) NV12 framebuffer is rejected by the
- *              kernel on Intel hardware (display ver < 20 expects -EINVAL).
- * Driver requirement: i915, xe
- *
- * SUBTEST: planar-pixel-format-settings@nv12-odd-height
- * Description: Verify odd-height (257px) NV12 framebuffer is rejected by the
- *              kernel on Intel hardware (display ver < 20 or >= 35 expects -EINVAL).
- * Driver requirement: i915, xe
- *
- * SUBTEST: planar-pixel-format-settings@nv12-odd-horizontal-pan
- * Description: Verify odd horizontal pan on NV12 framebuffer is rejected by
- *              the kernel on Intel hardware (display ver < 35 expects -EINVAL).
- * Driver requirement: i915, xe
- *
- * SUBTEST: planar-pixel-format-settings@p016-odd-vertical-pan
- * Description: Verify odd vertical pan on P016 framebuffer and check CRC
- *              matches a reference XRGB8888 blue fill on Intel hardware.
- * Driver requirement: i915, xe
- *
- * SUBTEST: planar-pixel-format-settings@nv12-tile4-src-y
- * Description: Verify that an NV12 Tile4 framebuffer with src_y=1 renders
- *              correctly on Intel hardware. CRC comparison detects
- *              corruption.
- * Driver requirement: xe
+ * SUBTEST: planar-pixel-format-settings
+ * Description: Verify planar pixel format settings are accepted or rejected
+ *              correctly on Intel hardware.
  *
  * SUBTEST: plane-position-%s
  * Description: Verify plane position using two planes to create a %arg[1]
@@ -1386,6 +1364,10 @@ planar_test_setup(data_t *data, igt_crtc_t *crtc, igt_output_t *output)
 	return igt_output_get_plane_type(output, DRM_PLANE_TYPE_PRIMARY);
 }
 
+/*
+ * Verify odd-width (257px) NV12 framebuffer is rejected by the kernel on
+ * Intel hardware (display ver < 20 expects -EINVAL).
+ */
 static void
 test_nv12_odd_width(data_t *data, igt_crtc_t *crtc, igt_output_t *output,
 		    int display_ver)
@@ -1415,6 +1397,10 @@ test_nv12_odd_width(data_t *data, igt_crtc_t *crtc, igt_output_t *output,
 		     rval, expected_rval);
 }
 
+/*
+ * Verify odd-height (257px) NV12 framebuffer is rejected by the kernel on
+ * Intel hardware (display ver < 20 or >= 35 expects -EINVAL).
+ */
 static void
 test_nv12_odd_height(data_t *data, igt_crtc_t *crtc, igt_output_t *output,
 		     int display_ver)
@@ -1444,6 +1430,10 @@ test_nv12_odd_height(data_t *data, igt_crtc_t *crtc, igt_output_t *output,
 		     rval, expected_rval);
 }
 
+/*
+ * Verify odd horizontal pan on NV12 framebuffer is rejected by the kernel on
+ * Intel hardware (display ver < 35 expects -EINVAL).
+ */
 static void
 test_nv12_odd_horizontal_pan(data_t *data, igt_crtc_t *crtc,
 			     igt_output_t *output, int display_ver)
@@ -1475,6 +1465,10 @@ test_nv12_odd_horizontal_pan(data_t *data, igt_crtc_t *crtc,
 		     rval, expected_rval);
 }
 
+/*
+ * Verify odd vertical pan on P016 framebuffer and check CRC matches a
+ * reference XRGB8888 blue fill on Intel hardware.
+ */
 static void
 test_p016_odd_vertical_pan(data_t *data, igt_crtc_t *crtc,
 			   igt_output_t *output, int display_ver)
@@ -1540,7 +1534,8 @@ test_p016_odd_vertical_pan(data_t *data, igt_crtc_t *crtc,
 }
 
 /*
- * test_nv12_tile4_src_y - NV12 Tile4 with src_y=1 CRC correctness check.
+ * Verify that an NV12 Tile4 framebuffer with src_y=1 renders correctly on
+ * Intel hardware. CRC comparison detects corruption.
  *
  * If kernel program wrong UV DPT va, hardware read chroma from
  * an unmapped page, producing incorrect picture and crc mismatch

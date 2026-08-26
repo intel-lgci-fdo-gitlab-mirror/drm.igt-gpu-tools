@@ -26,6 +26,22 @@
 #include "amd_memory.h"
 #include "amd_gfx.h"
 
+#define AMDGPU_DEBUG_ENABLE_CE_CS 0x400
+
+/* Returns true if kernel allows CE CS (amdgpu debug_mask has bit 0x400 set). */
+static bool amdgpu_ce_cs_enabled(void)
+{
+	FILE *f;
+	unsigned int mask = 0;
+
+	f = fopen("/sys/module/amdgpu/parameters/debug_mask", "r");
+	if (!f)
+		return false;
+	fscanf(f, "%u", &mask);
+	fclose(f);
+	return (mask & AMDGPU_DEBUG_ENABLE_CE_CS) != 0;
+}
+
 /**
  *
  * @param device
@@ -44,6 +60,9 @@ void amdgpu_command_submission_gfx_separate_ibs(amdgpu_device_handle device)
 	amdgpu_bo_list_handle bo_list;
 	amdgpu_va_handle va_handle, va_handle_ce;
 	int r;
+
+	igt_require_f(amdgpu_ce_cs_enabled(),
+		      "CE CS blocked; reload amdgpu with debug_mask=0x400 to enable\n");
 
 	r = amdgpu_cs_ctx_create(device, &context_handle);
 	igt_assert_eq(r, 0);
@@ -133,6 +152,9 @@ void amdgpu_command_submission_gfx_shared_ib(amdgpu_device_handle device)
 	amdgpu_bo_list_handle bo_list;
 	amdgpu_va_handle va_handle;
 	int r;
+
+	igt_require_f(amdgpu_ce_cs_enabled(),
+		      "CE CS blocked; reload amdgpu with debug_mask=0x400 to enable\n");
 
 	r = amdgpu_cs_ctx_create(device, &context_handle);
 	igt_assert_eq(r, 0);

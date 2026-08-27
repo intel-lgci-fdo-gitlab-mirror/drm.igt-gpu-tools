@@ -833,11 +833,14 @@ static void force_pixel_format(data_t *data, int pixel_format, int conn_id)
 
 	test_init(data, conn_id);
 
-	fd = igt_debugfs_connector_dir(data->fd, data->output->name, O_RDONLY);
-	igt_assert(fd >= 0);
-
 	igt_info("Setting %d on connector id %d\n",
 			pixel_format, data->output->config.connector->connector_id);
+
+	igt_skip_on_f(is_intel_device(data->fd),
+		      "pixel-format forcing is not supported on Intel devices\n");
+
+	fd = igt_debugfs_connector_dir(data->fd, data->output->name, O_RDONLY);
+	igt_assert(fd >= 0);
 
 	switch (pixel_format) {
 	case 1:

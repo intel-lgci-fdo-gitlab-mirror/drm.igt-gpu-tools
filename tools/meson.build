@@ -183,7 +183,7 @@ executable('intel_gpu_top', 'intel_gpu_top.c',
 	   dependencies : [lib_igt_perf,lib_igt_device_scan,lib_igt_drm_clients,lib_igt_drm_fdinfo,
 	                   lib_igt_drm_stub, lib_igt_tools_stub, math])
 
-executable('amd_hdmi_compliance', 'amd_hdmi_compliance.c',
+executable('igt_hdmi_compliance', 'igt_hdmi_compliance.c',
 	   dependencies : [tool_deps],
 	   install_rpath : bindir_rpathdir,
 	   install : true)

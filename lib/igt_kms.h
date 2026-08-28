@@ -669,10 +669,6 @@ static inline bool igt_output_is_connected(igt_output_t *output)
 	    !output->config.connector->count_modes)
 		return false;
 
-	if (output->config.connector->connector_type == DRM_MODE_CONNECTOR_WRITEBACK ||
-	    output->config.connector->connector_type == DRM_MODE_CONNECTOR_VIRTUAL)
-		return false;
-
 	if (output->config.connector->connection == DRM_MODE_CONNECTED)
 		return true;
 

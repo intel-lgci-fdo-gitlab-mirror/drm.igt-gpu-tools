@@ -13,6 +13,7 @@
 #include "lib/amdgpu/compute_utils/amd_dispatch.h"
 #include "igt.h"
 #include "igt_multigpu.h"
+#include "lib/amdgpu/amd_platform.h"
 
 #define BUFFER_SIZE (8 * 1024)
 
@@ -162,10 +163,9 @@ int igt_main()
 	amdgpu_device_handle device;
 	int fd = -1;
 	bool enable_test = false;
+	struct amdgpu_gpu_info gpu_info = {0};
 #ifdef AMDGPU_USERQ_ENABLED
-	const char *env = getenv("AMDGPU_ENABLE_USERQTEST");
-
-	enable_test = env && atoi(env);
+	enable_test = true;
 #endif
 
 	igt_fixture() {
@@ -179,6 +179,9 @@ int igt_main()
 
 		igt_info("Initialized amdgpu, driver version %d.%d\n",
 			 major, minor);
+		err = amdgpu_query_gpu_info(device, &gpu_info);
+		igt_assert_eq(err, 0);
+		amd_platform_filter_init(&gpu_info);
 	}
 
 	igt_subtest("multi-gpu-memeory-alloc") {

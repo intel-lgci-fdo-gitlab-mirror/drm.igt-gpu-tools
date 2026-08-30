@@ -10,6 +10,7 @@
 
 #include "lib/amdgpu/amd_memory.h"
 #include "lib/amdgpu/amd_command_submission.h"
+#include "lib/amdgpu/amd_platform.h"
 
 /* --------------------- Secure bounce test ------------------------ *
  *
@@ -319,9 +320,7 @@ int igt_main()
 
 #ifdef AMDGPU_USERQ_ENABLED
 	bool enable_test;
-	const char *env = getenv("AMDGPU_ENABLE_USERQTEST");
-
-	enable_test = env && atoi(env);
+	enable_test = true;
 #endif
 
 	igt_fixture() {
@@ -341,6 +340,7 @@ int igt_main()
 		igt_assert_eq(r, 0);
 		asic_userq_readiness(device, userq_arr_cap);
 		igt_skip_on(!is_security_tests_enable(device, &gpu_info, major, minor));
+		amd_platform_filter_init(&gpu_info);
 	}
 
 	igt_describe("amdgpu security alloc buf test");

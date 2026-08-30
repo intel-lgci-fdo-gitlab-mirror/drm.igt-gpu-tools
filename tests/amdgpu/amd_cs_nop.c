@@ -12,6 +12,7 @@
 #include "lib/amdgpu/amd_PM4.h"
 #include "lib/amdgpu/amd_ip_blocks.h"
 #include "lib/amdgpu/amd_memory.h"
+#include "lib/amdgpu/amd_platform.h"
 
 static void amdgpu_cs_sync(amdgpu_context_handle context,
 			   unsigned int ip_type,
@@ -150,6 +151,7 @@ int igt_main()
 {
 	amdgpu_device_handle device;
 	amdgpu_context_handle context;
+	struct amdgpu_gpu_info gpu_info = {0};
 	const struct phase {
 		const char *name;
 		unsigned int flags;
@@ -174,9 +176,7 @@ int igt_main()
 	bool userq_arr_cap[AMD_IP_MAX] = {0};
 #ifdef AMDGPU_USERQ_ENABLED
 	bool enable_test;
-	const char *env = getenv("AMDGPU_ENABLE_USERQTEST");
-
-	enable_test = env && atoi(env);
+	enable_test = true;
 #endif
 
 	igt_fixture() {
@@ -192,6 +192,9 @@ int igt_main()
 		igt_assert_eq(err, 0);
 		asic_rings_readness(device, 1, arr_cap);
 		asic_userq_readiness(device, userq_arr_cap);
+		err = amdgpu_query_gpu_info(device, &gpu_info);
+		igt_assert_eq(err, 0);
+		amd_platform_filter_init(&gpu_info);
 	}
 
 	for (p = phase; p->name; p++) {

@@ -10,6 +10,7 @@
 #include "lib/amdgpu/amd_deadlock_helpers.h"
 #include "lib/amdgpu/amdgpu_asic_addr.h"
 #include "lib/amdgpu/amd_utils.h"
+#include "lib/amdgpu/amd_platform.h"
 
 #define AMDGPU_FAMILY_SI                        110 /* Hainan, Oland, Verde, Pitcairn, Tahiti */
 #define AMDGPU_FAMILY_CI                        120 /* Bonaire, Hawaii */
@@ -46,9 +47,7 @@ int igt_main()
 
 #ifdef AMDGPU_USERQ_ENABLED
 	bool enable_test;
-	const char *env = getenv("AMDGPU_ENABLE_USERQTEST");
-
-	enable_test = env && atoi(env);
+	enable_test = true;
 #endif
 
 	igt_fixture() {
@@ -75,6 +74,7 @@ int igt_main()
 		igt_skip_on(get_pci_addr_from_fd(fd, &pci));
 		igt_info("PCI Address: domain %04x, bus %02x, device %02x, function %02x\n",
 				pci.domain, pci.bus, pci.device, pci.function);
+		amd_platform_filter_init(&gpu_info);
 	}
 	igt_describe("Test-GPU-reset-by-flooding-sdma-ring-with-jobs");
 	igt_subtest_with_dynamic("amdgpu-deadlock-sdma") {

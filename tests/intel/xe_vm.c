@@ -1278,7 +1278,7 @@ test_bind_array_conflict(int fd, struct drm_xe_engine_class_instance *eci,
 
 	munmap(map, bo_size);
 	if (map2)
-		munmap(map, bo_size);
+		munmap(map2, bo_size);
 	gem_close(fd, bo);
 	if (bo2)
 		gem_close(fd, bo2);

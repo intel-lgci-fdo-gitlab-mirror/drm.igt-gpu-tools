@@ -237,7 +237,7 @@ int igt_main()
 				      {"job_timeout_ms", "job_timeout_min", "job_timeout_max"},
 	};
 
-	unsigned int store[MAX_GTS][3][3];
+	unsigned int store[MAX_GTS][XE_MAX_ENGINE_INSTANCE][3][3];
 	int count = sizeof(property) / sizeof(property[0]);
 	int gt_count = 0;
 	int xe = -1;
@@ -271,7 +271,7 @@ int igt_main()
 					const char **pl = property[j];
 
 					for (int k = 0; k < 3; k++) {
-						unsigned int *loc = &store[i][j][k];
+						unsigned int *loc = &store[gt_count][i][j][k];
 
 						igt_require(igt_sysfs_scanf(list[i], pl[k],
 									    "%u", loc) == 1);
@@ -314,7 +314,7 @@ int igt_main()
 
 					for (int k = 2; k >= 0; k--) {
 						unsigned int read = UINT_MAX;
-						unsigned int val = store[i][j][k];
+						unsigned int val = store[gtn][i][j][k];
 
 						igt_sysfs_printf(e, pl[k], "%u", val);
 						igt_sysfs_scanf(e, pl[k], "%u", &read);

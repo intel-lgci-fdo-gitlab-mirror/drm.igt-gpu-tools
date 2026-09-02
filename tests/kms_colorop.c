@@ -517,6 +517,7 @@ int igt_main_args("d", long_options, help_str, opt_handler, NULL)
 
 	igt_display_t display;
 	int i, j, ret;
+	int has_plane_color_pipeline = 0;
 
 	igt_fixture() {
 		display.drm_fd = drm_open_driver_master(DRIVER_ANY);
@@ -528,15 +529,13 @@ int igt_main_args("d", long_options, help_str, opt_handler, NULL)
 
 		igt_require_f(!ret, "error setting DRM_CLIENT_CAP_WRITEBACK_CONNECTORS\n");
 
-		igt_display_require(&display, display.drm_fd);
 		if (drmSetClientCap(display.drm_fd, DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE, 1) == 0)
-			display.has_plane_color_pipeline = 1;
+			has_plane_color_pipeline = 1;
 
 		kmstest_set_vt_graphics_mode();
 
 		igt_display_require(&display, display.drm_fd);
-		if (drmSetClientCap(display.drm_fd, DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE, 1) == 0)
-			display.has_plane_color_pipeline = 1;
+		display.has_plane_color_pipeline = has_plane_color_pipeline;
 
 		igt_require(display.is_atomic);
 	}

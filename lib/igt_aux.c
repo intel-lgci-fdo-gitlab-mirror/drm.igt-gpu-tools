@@ -699,9 +699,13 @@ void igt_print_activity(void)
 static int autoresume_delay;
 bool __console_suspend_saved_state;
 bool __pm_debug_messages_state;
+static char __printk_saved_state[64];
+static ssize_t __printk_saved_state_len = -1;
 
 #define SYSFS_MODULE_PRINTK "/sys/module/printk/parameters/"
+#define PROC_SYS_KERNEL_PRINTK "/proc/sys/kernel/printk"
 #define CONSOLE_SUSPEND_DISABLE false
+#define SERIAL_CONSOLE_LOGLEVEL "8\n"
 
 static const char *suspend_state_name[] = {
 	[SUSPEND_STATE_FREEZE] = "freeze",
@@ -915,6 +919,23 @@ static bool is_mem_sleep_state_supported(int power_dir, enum igt_mem_sleep state
 static void igt_aux_pm_suspend_dbg_restore_exit_handler(int sig)
 {
 	int sysfs_fd, power_dir;
+	int fd;
+	ssize_t written;
+
+	if (__printk_saved_state_len > 0) {
+		fd = open(PROC_SYS_KERNEL_PRINTK, O_WRONLY);
+		if (fd >= 0) {
+			written = write(fd, __printk_saved_state, __printk_saved_state_len);
+			if (written != __printk_saved_state_len)
+				igt_warn("Unable to restore %s Err:%d\n",
+					 PROC_SYS_KERNEL_PRINTK, errno);
+			close(fd);
+		} else {
+			igt_warn("Unable to open %s Err:%d\n", PROC_SYS_KERNEL_PRINTK, errno);
+		}
+
+		__printk_saved_state_len = -1;
+	}
 
 	sysfs_fd = open(SYSFS_MODULE_PRINTK, O_RDONLY);
 	if (sysfs_fd < 0)
@@ -933,6 +954,67 @@ static void igt_aux_pm_suspend_dbg_restore_exit_handler(int sig)
 	close(power_dir);
 }
 
+static void igt_aux_enable_suspend_serial_logs(void)
+{
+	int fd;
+	ssize_t len;
+	ssize_t written;
+
+	fd = open(PROC_SYS_KERNEL_PRINTK, O_RDWR);
+	if (fd < 0) {
+		igt_warn("Unable to open %s Err:%d\n", PROC_SYS_KERNEL_PRINTK, errno);
+		return;
+	}
+
+	len = read(fd, __printk_saved_state, sizeof(__printk_saved_state) - 1);
+	if (len < 0) {
+		igt_warn("Unable to read %s Err:%d\n", PROC_SYS_KERNEL_PRINTK, errno);
+		close(fd);
+		return;
+	}
+
+	__printk_saved_state[len] = '\0';
+	__printk_saved_state_len = len;
+
+	if (lseek(fd, 0, SEEK_SET) < 0) {
+		igt_warn("Unable to seek %s Err:%d\n", PROC_SYS_KERNEL_PRINTK, errno);
+		close(fd);
+		return;
+	}
+
+	written = write(fd, SERIAL_CONSOLE_LOGLEVEL, strlen(SERIAL_CONSOLE_LOGLEVEL));
+	if (written != strlen(SERIAL_CONSOLE_LOGLEVEL)) {
+		igt_warn("Unable to set %s to %s Err:%d\n",
+			 PROC_SYS_KERNEL_PRINTK, SERIAL_CONSOLE_LOGLEVEL, errno);
+		__printk_saved_state_len = -1;
+	}
+
+	close(fd);
+}
+
+static void igt_aux_restore_suspend_serial_logs(void)
+{
+	int fd;
+	ssize_t written;
+
+	if (__printk_saved_state_len <= 0)
+		return;
+
+	fd = open(PROC_SYS_KERNEL_PRINTK, O_WRONLY);
+	if (fd < 0) {
+		igt_warn("Unable to open %s Err:%d\n", PROC_SYS_KERNEL_PRINTK, errno);
+		return;
+	}
+
+	written = write(fd, __printk_saved_state, __printk_saved_state_len);
+	if (written != __printk_saved_state_len)
+		igt_warn("Unable to restore %s Err:%d\n", PROC_SYS_KERNEL_PRINTK, errno);
+	else
+		__printk_saved_state_len = -1;
+
+	close(fd);
+}
+
 /**
  * igt_aux_enable_pm_suspend_dbg:
  * @power_dir: /sys/power/ dir fd
@@ -948,6 +1030,8 @@ static void igt_aux_pm_suspend_dbg_restore_exit_handler(int sig)
 static void igt_aux_enable_pm_suspend_dbg(int power_dir)
 {
 	int sysfs_fd;
+
+	igt_aux_enable_suspend_serial_logs();
 
 	sysfs_fd = open(SYSFS_MODULE_PRINTK, O_RDONLY);
 	if (sysfs_fd > 0) {
@@ -1026,6 +1110,8 @@ void igt_system_suspend_autoresume(enum igt_suspend_state state,
 		suspend_via_rtcwake(state);
 	else
 		suspend_via_sysfs(power_dir, state);
+
+	igt_aux_restore_suspend_serial_logs();
 
 	if (orig_mem_sleep)
 		set_mem_sleep(power_dir, orig_mem_sleep);

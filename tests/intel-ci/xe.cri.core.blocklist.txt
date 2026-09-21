@@ -17,7 +17,7 @@ igt@xe_pxp@(?!pxp-bo-alloc$|pxp-queue-alloc$).*
 ##################################################################
 # Valid skip: multigpu runs in separate config
 ##################################################################
-igt@.*@.*multigpu.*
+igt@.*multigpu.*
 igt@xe_peer2peer@.*
 #################################################################
 # Valid skip: No render engine support on CRI

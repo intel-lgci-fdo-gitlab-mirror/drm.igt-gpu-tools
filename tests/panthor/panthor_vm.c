@@ -7,6 +7,47 @@
 #include "igt_sizes.h"
 #include "panthor_drm.h"
 
+/**
+ * panthor_driver_version_at_least:
+ * @fd: panthor device file descriptor
+ * @major: required Panthor major version
+ * @minor: required Panthor minor version
+ *
+ * Returns true if the Panthor version is at least the requested version.
+ */
+static bool
+panthor_driver_version_at_least(int fd, int major, int minor)
+{
+	drmVersionPtr version = drmGetVersion(fd);
+	bool supported;
+
+	igt_assert(version);
+	supported = version->version_major > major ||
+		    (version->version_major == major &&
+		     version->version_minor >= minor);
+	drmFreeVersion(version);
+
+	return supported;
+}
+
+/**
+ * require_panthor_version:
+ * @fd: device file descriptor
+ * @major: required Panthor major version
+ * @minor: required Panthor minor version
+ *
+ * Require the Panthor version to be at least the requested version.
+ */
+static void
+require_panthor_version(int fd, int major, int minor)
+{
+	if (!panthor_driver_version_at_least(fd, major, minor)) {
+		/* Clear irrelevant errno to avoid printing it in the skip log. */
+		errno = 0;
+		igt_skip("Panthor version %d.%d or newer required\n", major, minor);
+	}
+}
+
 int igt_main() {
 	int fd = -1;
 
@@ -293,6 +334,7 @@ int igt_main() {
 		uint32_t vm_id;
 		uint64_t map_size = SZ_4K * 4;
 
+		require_panthor_version(fd, 1, 9);
 		igt_panthor_vm_create(fd, &vm_id, 0);
 		igt_assert(vm_id != 0);
 
@@ -306,6 +348,7 @@ int igt_main() {
 		uint64_t map_size = SZ_2M * 3;
 		const int INITIAL_VA = SZ_4M;
 
+		require_panthor_version(fd, 1, 9);
 		igt_panthor_vm_create(fd, &vm_id, 0);
 		igt_assert(vm_id != 0);
 
@@ -321,6 +364,7 @@ int igt_main() {
 		uint64_t map_size = SZ_2M * 3;
 		const int INITIAL_VA = SZ_4M;
 
+		require_panthor_version(fd, 1, 9);
 		igt_panthor_vm_create(fd, &vm_id, 0);
 		igt_assert(vm_id != 0);
 
@@ -336,6 +380,7 @@ int igt_main() {
 		uint64_t map_size = SZ_2M * 3;
 		const int INITIAL_VA = SZ_4M;
 
+		require_panthor_version(fd, 1, 9);
 		igt_panthor_vm_create(fd, &vm_id, 0);
 		igt_assert(vm_id != 0);
 
@@ -351,6 +396,7 @@ int igt_main() {
 		uint64_t map_size = SZ_2M * 3;
 		const int INITIAL_VA = SZ_4M;
 
+		require_panthor_version(fd, 1, 9);
 		igt_panthor_vm_create(fd, &vm_id, 0);
 		igt_assert(vm_id != 0);
 
@@ -366,6 +412,7 @@ int igt_main() {
 		uint64_t map_size = SZ_2M * 3;
 		const int INITIAL_VA = SZ_4M;
 
+		require_panthor_version(fd, 1, 9);
 		igt_panthor_vm_create(fd, &vm_id, 0);
 		igt_assert(vm_id != 0);
 
@@ -382,6 +429,7 @@ int igt_main() {
 		uint64_t map_size = SZ_2M * 3;
 		const int INITIAL_VA = SZ_4M;
 
+		require_panthor_version(fd, 1, 9);
 		igt_panthor_vm_create(fd, &vm_id, 0);
 		igt_assert(vm_id != 0);
 
@@ -402,6 +450,7 @@ int igt_main() {
 		uint64_t map_size = SZ_2M * 3;
 		const int INITIAL_VA = SZ_4M;
 
+		require_panthor_version(fd, 1, 9);
 		igt_panthor_vm_create(fd, &vm_id, 0);
 		igt_assert(vm_id != 0);
 
@@ -422,6 +471,7 @@ int igt_main() {
 		uint64_t map_size = SZ_2M * 3;
 		const int INITIAL_VA = SZ_4M;
 
+		require_panthor_version(fd, 1, 9);
 		igt_panthor_vm_create(fd, &vm_id, 0);
 		igt_assert(vm_id != 0);
 
@@ -442,6 +492,7 @@ int igt_main() {
 		uint64_t map_size = SZ_2M * 3;
 		const int INITIAL_VA = SZ_4M;
 
+		require_panthor_version(fd, 1, 9);
 		igt_panthor_vm_create(fd, &vm_id, 0);
 		igt_assert(vm_id != 0);
 
@@ -463,6 +514,7 @@ int igt_main() {
 		uint64_t map_size = SZ_2M * 3;
 		const int INITIAL_VA = SZ_4M;
 
+		require_panthor_version(fd, 1, 9);
 		igt_panthor_vm_create(fd, &vm_id, 0);
 		igt_assert(vm_id != 0);
 
@@ -483,6 +535,7 @@ int igt_main() {
 		uint64_t map_size = SZ_2M * 3;
 		const int INITIAL_VA = SZ_4M;
 
+		require_panthor_version(fd, 1, 9);
 		igt_panthor_vm_create(fd, &vm_id, 0);
 		igt_assert(vm_id != 0);
 
@@ -503,6 +556,7 @@ int igt_main() {
 		uint64_t map_size = SZ_2M * 3;
 		const int INITIAL_VA = SZ_4M;
 
+		require_panthor_version(fd, 1, 9);
 		igt_panthor_vm_create(fd, &vm_id, 0);
 		igt_assert(vm_id != 0);
 
@@ -524,6 +578,7 @@ int igt_main() {
 		uint64_t map_size = SZ_2M * 3;
 		const int INITIAL_VA = SZ_4M;
 
+		require_panthor_version(fd, 1, 9);
 		igt_panthor_vm_create(fd, &vm_id, 0);
 		igt_assert(vm_id != 0);
 
@@ -545,6 +600,7 @@ int igt_main() {
 		uint64_t map_size = SZ_2M * 3;
 		const int INITIAL_VA = SZ_4M;
 
+		require_panthor_version(fd, 1, 9);
 		igt_panthor_vm_create(fd, &vm_id, 0);
 		igt_assert(vm_id != 0);
 
@@ -566,6 +622,7 @@ int igt_main() {
 		uint64_t map_size = SZ_2M * 3;
 		const int INITIAL_VA = SZ_4M;
 
+		require_panthor_version(fd, 1, 9);
 		igt_panthor_vm_create(fd, &vm_id, 0);
 		igt_assert(vm_id != 0);
 
@@ -585,6 +642,7 @@ int igt_main() {
 		uint64_t map_size = ALIGN_DOWN(UINT64_MAX, SZ_2M) - (SZ_2M * 3);
 		const int INITIAL_VA = SZ_512M;
 
+		require_panthor_version(fd, 1, 9);
 		igt_panthor_vm_create(fd, &vm_id, 0);
 		igt_assert(vm_id != 0);
 
@@ -599,6 +657,7 @@ int igt_main() {
 		uint64_t unmap_size = ALIGN_DOWN(UINT64_MAX, SZ_2M) - map_size;
 		const int INITIAL_VA = SZ_512M;
 
+		require_panthor_version(fd, 1, 9);
 		igt_panthor_vm_create(fd, &vm_id, 0);
 		igt_assert(vm_id != 0);
 

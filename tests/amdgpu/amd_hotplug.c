@@ -30,7 +30,6 @@ IGT_TEST_DESCRIPTION("Test simulated hotplugging on connectors");
 /* Maximum pipes on any AMD ASIC. */
 #define MAX_PIPES 6
 #define LAST_HW_SLEEP_PATH "/sys/power/suspend_stats/last_hw_sleep"
-#define MEM_SLEEP_PATH "/sys/power/mem_sleep"
 
 /* Common test data. */
 typedef struct data {
@@ -102,26 +101,6 @@ static void test_fini(data_t *data)
 	igt_display_commit_atomic(display, DRM_MODE_ATOMIC_ALLOW_MODESET, 0);
 }
 
-/* Check if mem_sleep is s2idle */
-static bool is_system_s2idle(void)
-{
-	int fd;
-	char dst[64];
-	int read_byte;
-
-	fd = open(MEM_SLEEP_PATH, O_RDONLY);
-	if (fd == -1)
-		igt_skip("Open %s file error\n", MEM_SLEEP_PATH);
-
-	read_byte = read(fd, dst, sizeof(dst));
-	close(fd);
-
-	if (read_byte <= 0)
-		igt_skip("Read %s file error\n", MEM_SLEEP_PATH);
-
-	return strstr(dst, "[s2idle]");
-}
-
 /* Return the last hw_sleep duration time */
 static int get_last_hw_sleep_time(void)
 {
@@ -180,10 +159,7 @@ static void test_hotplug_basic(data_t *data, bool suspend)
 	}
 
 	if (suspend) {
-		if (!is_system_s2idle())
-			igt_skip("System is not configured for s2idle\n");
-
-		igt_system_suspend_autoresume(SUSPEND_STATE_MEM,
+		igt_system_suspend_autoresume(SUSPEND_STATE_FREEZE,
 					      SUSPEND_TEST_NONE);
 		igt_assert_f(get_last_hw_sleep_time() > 0,
 					  "Suspend did not reach hardware sleep state\n");

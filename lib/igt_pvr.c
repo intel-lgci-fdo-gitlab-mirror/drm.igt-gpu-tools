@@ -333,3 +333,22 @@ void igt_pvr_ioctl_destroy_free_list(int fd, uint32_t free_list_handle)
 
 	do_ioctl(fd, DRM_IOCTL_PVR_DESTROY_FREE_LIST, &destroy_free_list_args);
 }
+
+/**
+ * igt_pvr_get_device_info:
+ * @fd: The file descriptor of the DRM device.
+ *
+ * Function to get the device information from kernel.
+ */
+struct pvr_device_info *igt_pvr_get_device_info(int fd)
+{
+	struct drm_pvr_dev_query_gpu_info dev_info_get = {0};
+	static struct pvr_device_info info;
+
+	igt_pvr_ioctl_dev_query(fd, DRM_PVR_DEV_QUERY_GPU_INFO_GET,
+				sizeof(dev_info_get), &dev_info_get, 0);
+
+	igt_assert(pvr_device_info_init(&info, dev_info_get.gpu_id) == 0);
+
+	return &info;
+}

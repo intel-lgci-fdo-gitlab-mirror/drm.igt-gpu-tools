@@ -129,6 +129,7 @@ lib_sources = [
 	'igt_msm.c',
 	'igt_dsc.c',
 	'igt_hook.c',
+	'imagination/pvr_device_info.c',
 	'xe/xe_device.c',
 	'xe/xe_ggtt.c',
 	'xe/xe_gt.c',

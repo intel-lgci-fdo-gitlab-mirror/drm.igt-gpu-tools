@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+#include "imagination/pvr_device_info.h"
 #include "pvr_drm.h"
 
 uint32_t igt_pvr_ioctl_create_bo(int fd, size_t *size);
@@ -36,5 +37,7 @@ void igt_pvr_ioctl_vm_unmap(int fd, uint32_t vm_ctx_handle,
 uint32_t igt_pvr_ioctl_create_free_list(int fd, uint32_t vm_ctx_handle,
 					uint64_t gpu_addr);
 void igt_pvr_ioctl_destroy_free_list(int fd, uint32_t free_list_handle);
+
+struct pvr_device_info *igt_pvr_get_device_info(int fd);
 
 #endif /* IGT_PVR_H */

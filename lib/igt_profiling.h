@@ -12,6 +12,7 @@
 struct igt_profiled_device {
 	char *syspath;
 	char original_state;
+	char enable_state;
 };
 
 void igt_devices_configure_profiling(struct igt_profiled_device *devices, bool enable);

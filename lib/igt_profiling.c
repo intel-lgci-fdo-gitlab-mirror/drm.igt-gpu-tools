@@ -50,7 +50,10 @@ struct igt_profiled_device *igt_devices_profiled(void)
 
 	while ((entry = readdir(dev_dir)) != NULL) {
 		char path[PATH_MAX];
+		char driver_path[PATH_MAX];
+		char driver_link[PATH_MAX];
 		char orig_state;
+		ssize_t len;
 		int sysfs_fd;
 
 		/* All DRM device entries are symlinks to other paths within sysfs */
@@ -87,7 +90,23 @@ struct igt_profiled_device *igt_devices_profiled(void)
 		}
 
 		profiled_devices[i].syspath = strdup(path);
-		profiled_devices[i++].original_state = orig_state;
+		profiled_devices[i].original_state = orig_state;
+		profiled_devices[i].enable_state = '1';
+
+		snprintf(driver_path, sizeof(driver_path), "%s/%s/device/driver",
+			 SYSFS_DRM, entry->d_name);
+
+		len = readlink(driver_path, driver_link, sizeof(driver_link) - 1);
+		if (len >= 0) {
+			driver_link[len] = '\0';
+
+			if (strstr(driver_link, "/panthor")) {
+				/* Enable both cycle and timestamp sampling. */
+				profiled_devices[i].enable_state = '3';
+			}
+		}
+
+		i++;
 
 		close(sysfs_fd);
 	}
@@ -124,7 +143,7 @@ void igt_devices_configure_profiling(struct igt_profiled_device *devices, bool e
 		if (sysfs_fd < 0)
 			continue;
 
-		write(sysfs_fd, enable ? "1" : &devices[i].original_state, 1);
+		write(sysfs_fd, enable ? &devices[i].enable_state : &devices[i].original_state, 1);
 		close(sysfs_fd);
 	}
 }

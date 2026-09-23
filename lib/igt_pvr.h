@@ -11,6 +11,14 @@
 #include "imagination/pvr_device_info.h"
 #include "pvr_drm.h"
 
+struct igt_pvr_allocation {
+	uint32_t bo_handle;
+	size_t size;
+	void *cpu_addr;
+	uint64_t gpu_addr;
+	uint32_t vm_ctx;
+};
+
 uint32_t igt_pvr_ioctl_create_bo(int fd, size_t *size);
 uint32_t igt_pvr_ioctl_create_bo_ex(int fd, size_t *size, uint64_t flags);
 off_t igt_pvr_ioctl_get_bo_mmap_offset(int fd, uint32_t handle);
@@ -37,6 +45,17 @@ void igt_pvr_ioctl_vm_unmap(int fd, uint32_t vm_ctx_handle,
 uint32_t igt_pvr_ioctl_create_free_list(int fd, uint32_t vm_ctx_handle,
 					uint64_t gpu_addr);
 void igt_pvr_ioctl_destroy_free_list(int fd, uint32_t free_list_handle);
+
+void igt_pvr_init_allocators(int fd);
+struct igt_pvr_allocation *igt_pvr_allocate_addr(int fd, uint32_t vm_ctx, size_t size,
+						 uint64_t flags, uint64_t gpu_addr);
+struct igt_pvr_allocation *igt_pvr_allocate(int fd, uint32_t vm_ctx, size_t size, uint64_t flags,
+					    uint32_t heap_index);
+struct igt_pvr_allocation *igt_pvr_allocate_general(int fd, uint32_t vm_ctx, size_t size);
+void *igt_pvr_get_cpu_addr(int fd, struct igt_pvr_allocation *alloc);
+uint64_t igt_pvr_get_gpu_addr(struct igt_pvr_allocation *alloc);
+size_t igt_pvr_get_size(struct igt_pvr_allocation *alloc);
+void igt_pvr_free_all(int fd);
 
 struct pvr_device_info *igt_pvr_get_device_info(int fd);
 

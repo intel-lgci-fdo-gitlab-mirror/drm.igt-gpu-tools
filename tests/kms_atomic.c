@@ -230,7 +230,7 @@ static void crtc_get_current_state(igt_crtc_t *crtc, uint64_t *values)
 	int i;
 
 	for (i = 0; i < IGT_NUM_CRTC_PROPS; i++) {
-		if (crtc_filter(i)) {
+		if (crtc_filter(i) || !igt_crtc_has_prop(crtc, i)) {
 			values[i] = 0;
 			continue;
 		}

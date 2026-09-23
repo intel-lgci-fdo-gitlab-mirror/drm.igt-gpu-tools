@@ -6,6 +6,7 @@ pvr_progs = [ 'pvr_dev_query',
 	      'pvr_hwrt',
 	      'pvr_quirks_enhancements',
 	      'pvr_runtime_info',
+	      'pvr_submit_jobs',
 	      'pvr_vm_context',
 	    ]
 

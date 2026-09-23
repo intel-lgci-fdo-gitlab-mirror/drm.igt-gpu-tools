@@ -297,6 +297,146 @@ void igt_pvr_ioctl_vm_unmap(int fd, uint32_t vm_ctx_handle,
 }
 
 /**
+ * init_compute_context_state_stream:
+ * @stream: Pointer to the memory where the context state stream will be initialized.
+ *
+ * Function to initialize the compute context state stream.
+ *
+ * Returns: The length of the initialized stream.
+ */
+static uint32_t init_compute_context_state_stream(uint8_t *stream)
+{
+	uint8_t *stream_start = stream;
+	uint32_t stream_len;
+
+	STREAM_ADD_ITEM(true, uint32_t, 0, stream); // length
+	STREAM_ADD_ITEM(true, uint32_t, 0, stream);
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // cdmreg_cdm_context_pds0
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // cdmreg_cdm_context_pds1
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // cdmreg_cdm_terminate_pds
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // cdmreg_cdm_terminate_pds1
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // cdmreg_cdm_resume_pds0
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // cdmreg_cdm_context_pds0_b
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // cdmreg_cdm_resume_pds0_b
+
+	stream_len = stream - stream_start;
+	STREAM_ADD_ITEM(true, uint32_t, stream_len, stream_start); // update length
+
+	return stream_len;
+}
+
+/**
+ * init_render_context_state_stream:
+ * @stream: Pointer to the memory where the context state stream will be initialized.
+ *
+ * Function to initialize the render context state stream.
+ *
+ * Returns: The length of the initialized stream.
+ */
+static uint32_t init_render_context_state_stream(uint8_t *stream)
+{
+	uint8_t *stream_start = stream;
+	uint32_t stream_len;
+
+	STREAM_ADD_ITEM(true, uint32_t, 0, stream); // length
+	STREAM_ADD_ITEM(true, uint32_t, 0, stream);
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // geom_reg_vdm_context_state_base_addr
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // geom_reg_vdm_context_state_resume_addr
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // geom_reg_ta_context_state_base_addr
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[0].geom_reg_vdm_context_store_task0
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[0].geom_reg_vdm_context_store_task1
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[0].geom_reg_vdm_context_store_task2
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[0].geom_reg_vdm_context_store_task3
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[0].geom_reg_vdm_context_store_task4
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[0].geom_reg_vdm_context_resume_task0
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[0].geom_reg_vdm_context_resume_task1
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[0].geom_reg_vdm_context_resume_task2
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[0].geom_reg_vdm_context_resume_task3
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[0].geom_reg_vdm_context_resume_task4
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[1].geom_reg_vdm_context_store_task0
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[1].geom_reg_vdm_context_store_task1
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[1].geom_reg_vdm_context_store_task2
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[1].geom_reg_vdm_context_store_task3
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[1].geom_reg_vdm_context_store_task4
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[1].geom_reg_vdm_context_resume_task0
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[1].geom_reg_vdm_context_resume_task1
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[1].geom_reg_vdm_context_resume_task2
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[1].geom_reg_vdm_context_resume_task3
+	STREAM_ADD_ITEM(true, uint64_t, 0, stream); // state[1].geom_reg_vdm_context_resume_task4
+
+	stream_len = stream - stream_start;
+	STREAM_ADD_ITEM(true, uint32_t, stream_len, stream_start); // update length
+
+	return stream_len;
+}
+
+/**
+ * igt_pvr_ioctl_create_context:
+ * @fd: File descriptor of the DRM device.
+ * @type: Type of the context to create.
+ * @vm_ctx_handle: Handle to the VM context.
+ *
+ * Function to create a device context.
+ *
+ * Returns: Handle to the created context.
+ */
+uint32_t igt_pvr_ioctl_create_context(int fd, enum drm_pvr_ctx_type type,
+				      uint32_t vm_ctx_handle)
+{
+	#define CONTEXT_INIT_STREAM_SIZE 1024
+
+	struct drm_pvr_ioctl_create_context_args create_context_args = {
+		.type = type,
+		.priority = DRM_PVR_CTX_PRIORITY_NORMAL,
+		.vm_context_handle = vm_ctx_handle,
+	};
+
+	uint8_t init_render_context_stream[CONTEXT_INIT_STREAM_SIZE] __attribute__((aligned(8)));
+	uint8_t init_compute_context_stream[CONTEXT_INIT_STREAM_SIZE] __attribute__((aligned(8)));
+
+	switch (type) {
+	case DRM_PVR_CTX_TYPE_RENDER:
+		create_context_args.callstack_addr =
+			igt_pvr_get_gpu_addr(igt_pvr_allocate_general(fd,
+								      vm_ctx_handle,
+								      POWERVR_GPU_PAGE_SIZE));
+		create_context_args.static_context_state = to_user_pointer(init_render_context_stream);
+		create_context_args.static_context_state_len =
+			init_render_context_state_stream(init_render_context_stream);
+		break;
+
+	case DRM_PVR_CTX_TYPE_COMPUTE:
+		create_context_args.static_context_state = to_user_pointer(init_compute_context_stream);
+		create_context_args.static_context_state_len =
+			init_compute_context_state_stream(init_compute_context_stream);
+		break;
+
+	case DRM_PVR_CTX_TYPE_TRANSFER_FRAG:
+		break;
+	}
+
+	do_ioctl(fd, DRM_IOCTL_PVR_CREATE_CONTEXT, &create_context_args);
+
+	return create_context_args.handle;
+}
+
+/**
+ * igt_pvr_ioctl_destroy_context:
+ * @fd: File descriptor of the DRM device.
+ * @ctx_handle: Handle of the context to destroy.
+ *
+ * Function to destroy a device context.
+ */
+void igt_pvr_ioctl_destroy_context(int fd, uint32_t ctx_handle)
+{
+	struct drm_pvr_ioctl_destroy_context_args destroy_context_args = {
+		.handle = ctx_handle,
+	};
+
+	do_ioctl(fd, DRM_IOCTL_PVR_DESTROY_CONTEXT, &destroy_context_args);
+}
+
+/**
  * igt_pvr_ioctl_create_free_list:
  * @fd: The file descriptor of the DRM device.
  * @vm_ctx_handle: The handle of the VM context.
@@ -661,4 +801,97 @@ struct pvr_device_info *igt_pvr_get_device_info(int fd)
 	igt_assert(pvr_device_info_init(&info, dev_info_get.gpu_id) == 0);
 
 	return &info;
+}
+
+/**
+ * igt_pvr_create_hwrt_geom_data_args:
+ * @fd: The file descriptor of the DRM device.
+ * @vm_ctx: The VM context.
+ * @geom_data_args: The geometry data arguments structure to initialize.
+ *
+ * Function to create hardware render target ioctl geometry data arguments.
+ *
+ */
+static void igt_pvr_create_hwrt_geom_data_args(int fd, uint32_t vm_ctx,
+					       struct drm_pvr_create_hwrt_geom_data_args
+					       *geom_data_args)
+{
+	geom_data_args->rtc_dev_addr =
+		igt_pvr_get_gpu_addr(igt_pvr_allocate_general(fd, vm_ctx, POWERVR_GPU_PAGE_SIZE));
+	geom_data_args->tpc_dev_addr =
+		igt_pvr_get_gpu_addr(igt_pvr_allocate_general(fd, vm_ctx, POWERVR_GPU_PAGE_SIZE));
+	geom_data_args->vheap_table_dev_addr =
+		igt_pvr_get_gpu_addr(igt_pvr_allocate_general(fd, vm_ctx, POWERVR_GPU_PAGE_SIZE));
+	geom_data_args->tpc_size = POWERVR_GPU_PAGE_SIZE;
+	geom_data_args->tpc_stride = 0x1;
+}
+
+/**
+ * igt_pvr_create_hwrt_rt_data_args:
+ * @fd: The file descriptor of the DRM device.
+ * @vm_ctx: The VM context.
+ * @rt_data_args: The render target data arguments structure to initialize.
+ *
+ * Function to create hardware render target ioctl render target data arguments.
+ *
+ */
+static void igt_pvr_create_hwrt_rt_data_args(int fd, uint32_t vm_ctx,
+					     struct drm_pvr_create_hwrt_rt_data_args *rt_data_args)
+{
+	rt_data_args->pm_mlist_dev_addr =
+		igt_pvr_get_gpu_addr(igt_pvr_allocate_general(fd, vm_ctx, POWERVR_GPU_PAGE_SIZE));
+	rt_data_args->macrotile_array_dev_addr =
+		igt_pvr_get_gpu_addr(igt_pvr_allocate_general(fd, vm_ctx, POWERVR_GPU_PAGE_SIZE));
+	rt_data_args->region_header_dev_addr =
+		igt_pvr_get_gpu_addr(igt_pvr_allocate_general(fd, vm_ctx, POWERVR_GPU_PAGE_SIZE));
+}
+
+/**
+ * igt_pvr_ioctl_create_hwrt_dataset:
+ * @fd: The file descriptor of the DRM device.
+ * @vm_ctx: The VM context.
+ * @free_list_handles: Array of free list handles.
+ * @num_free_lists: Number of free list handles.
+ *
+ * Function to create a hardware render target dataset.
+ *
+ * Returns: Handle of the created hardware render target dataset.
+ */
+uint32_t igt_pvr_ioctl_create_hwrt_dataset(int fd, uint32_t vm_ctx, uint32_t *free_list_handles,
+					   uint32_t num_free_lists)
+{
+	struct drm_pvr_ioctl_create_hwrt_dataset_args create_hwrt_args = {
+		.width = 256,
+		.height = 256,
+		.samples = 1,
+		.layers = 1,
+		.region_header_size = 64,
+	};
+
+	igt_pvr_create_hwrt_geom_data_args(fd, vm_ctx, &create_hwrt_args.geom_data_args);
+	igt_pvr_create_hwrt_rt_data_args(fd, vm_ctx, &create_hwrt_args.rt_data_args[0]);
+	igt_pvr_create_hwrt_rt_data_args(fd, vm_ctx, &create_hwrt_args.rt_data_args[1]);
+
+	for (uint32_t i = 0; i < num_free_lists; i++)
+		create_hwrt_args.free_list_handles[i] = free_list_handles[i];
+
+	do_ioctl(fd, DRM_IOCTL_PVR_CREATE_HWRT_DATASET, &create_hwrt_args);
+
+	return create_hwrt_args.handle;
+}
+
+/**
+ * igt_pvr_ioctl_destroy_hwrt_dataset:
+ * @fd: The file descriptor of the DRM device.
+ * @hwrt_handle: The handle of the hardware render target dataset to destroy.
+ *
+ * Function to destroy a hardware render target dataset.
+ */
+void igt_pvr_ioctl_destroy_hwrt_dataset(int fd, uint32_t hwrt_handle)
+{
+	struct drm_pvr_ioctl_destroy_hwrt_dataset_args destroy_hwrt_args = {
+		.handle = hwrt_handle,
+	};
+
+	do_ioctl(fd, DRM_IOCTL_PVR_DESTROY_HWRT_DATASET, &destroy_hwrt_args);
 }

@@ -11,6 +11,18 @@
 #include "imagination/pvr_device_info.h"
 #include "pvr_drm.h"
 
+#define DRM_PVR_EMPTY_OBJ_ARRAY(type) \
+	{ .stride = sizeof(type), .count = 0, .array = 0 }
+
+#define STREAM_ADD_ITEM(condition, type, data, stream) \
+	do { \
+		if (condition) { \
+			type *item = (type *)(stream); \
+			*item = data; \
+			stream += sizeof(type); \
+		} \
+	} while (0)
+
 struct igt_pvr_allocation {
 	uint32_t bo_handle;
 	size_t size;
@@ -42,6 +54,10 @@ void igt_pvr_ioctl_vm_map(int fd, uint32_t vm_ctx_handle, uint32_t handle,
 void igt_pvr_ioctl_vm_unmap(int fd, uint32_t vm_ctx_handle,
 			    uint64_t device_addr, uint64_t size);
 
+uint32_t igt_pvr_ioctl_create_context(int fd, enum drm_pvr_ctx_type type,
+				      uint32_t vm_ctx_handle);
+void igt_pvr_ioctl_destroy_context(int fd, uint32_t ctx_handle);
+
 uint32_t igt_pvr_ioctl_create_free_list(int fd, uint32_t vm_ctx_handle,
 					uint64_t gpu_addr);
 void igt_pvr_ioctl_destroy_free_list(int fd, uint32_t free_list_handle);
@@ -58,5 +74,9 @@ size_t igt_pvr_get_size(struct igt_pvr_allocation *alloc);
 void igt_pvr_free_all(int fd);
 
 struct pvr_device_info *igt_pvr_get_device_info(int fd);
+
+uint32_t igt_pvr_ioctl_create_hwrt_dataset(int fd, uint32_t vm_ctx, uint32_t *free_list_handles,
+					   uint32_t num_free_lists);
+void igt_pvr_ioctl_destroy_hwrt_dataset(int fd, uint32_t hwrt_handle);
 
 #endif /* IGT_PVR_H */

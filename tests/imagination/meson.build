@@ -8,6 +8,7 @@ pvr_progs = [ 'pvr_dev_query',
 	      'pvr_runtime_info',
 	      'pvr_submit_jobs',
 	      'pvr_vm_context',
+	      'pvr_vm_map',
 	    ]
 
 pvr_deps = test_deps

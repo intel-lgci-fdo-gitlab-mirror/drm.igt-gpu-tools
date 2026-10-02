@@ -705,8 +705,10 @@ static int wait_for_value64(volatile uint64_t *ptr, uint64_t expected,
 		/* Sleep if interval specified, otherwise tight loop */
 		if (check_interval_ns > 0)
 			nanosleep(&sleep_time, NULL);
+#if defined(x86_64) || defined(i386)
 		else
 			__asm__ __volatile__("pause" ::: "memory"); /* CPU hint for spin-wait */
+#endif
 	}
 }
 

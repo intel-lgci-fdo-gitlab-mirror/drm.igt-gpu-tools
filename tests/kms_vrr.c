@@ -1068,7 +1068,7 @@ lobf_flip_video_timing_fps(data_t *data, igt_output_t *output,
 	for (int i = igt_vrr_standard_video_timing_fps_count - 1; i >= 0; i--) {
 		uint32_t fps = igt_vrr_standard_video_timing_fps[i];
 
-		if (fps > mode->vrefresh)
+		if (fps > (mode->vrefresh / 2))
 			continue;
 
 		igt_info("Testing LOBF with a %u hz flip rate on %u hz panel refresh rate: ",

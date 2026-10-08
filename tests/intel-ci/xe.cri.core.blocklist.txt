@@ -9,11 +9,11 @@ igt@fbdev@.*
 # Valid skip: Features / hardware blocks not present on CRI
 #   - xe_huc_copy@: No HuC support on CRI.
 #   - xe_oa@oa-tlb-invalidate: valid only for older gen12 platforms.
-#   - xe_pxp@.*: No PXP on CRI so skip except negative-pxp tests
+#   - xe_pxp@.*: No PXP (Protected Xe Path) support on CRI.
 ##################################################################
 igt@xe_huc_copy@.*
 igt@xe_oa@oa-tlb-invalidate
-igt@xe_pxp@(?!pxp-bo-alloc$|pxp-queue-alloc$).*
+igt@xe_pxp@.*
 ##################################################################
 # Valid skip: multigpu runs in separate config
 ##################################################################

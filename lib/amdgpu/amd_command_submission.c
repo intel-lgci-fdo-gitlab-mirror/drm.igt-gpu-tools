@@ -182,8 +182,8 @@ static void amdgpu_create_ip_queues(amdgpu_device_handle device,
 	amdgpu_dma_limits_query(device, &limits);
 
 	if (user_queue)
-		available_rings = hw_ip_info.num_userq_slots ?
-			((1 << hw_ip_info.num_userq_slots) - 1) : 1;
+		available_rings = hw_ip_info.userq_num_slots ?
+			((1 << hw_ip_info.userq_num_slots) - 1) : 1;
 	else
 		available_rings = hw_ip_info.available_rings;
 
@@ -409,8 +409,8 @@ void amdgpu_command_submission_write_linear_helper(amdgpu_device_handle device,
 	igt_assert_eq(r, 0);
 
 	if (user_queue)
-		available_rings = ring_context->hw_ip_info.num_userq_slots ?
-			((1 << ring_context->hw_ip_info.num_userq_slots) -1) : 1;
+		available_rings = ring_context->hw_ip_info.userq_num_slots ?
+			((1 << ring_context->hw_ip_info.userq_num_slots) -1) : 1;
 	else
 		available_rings = ring_context->hw_ip_info.available_rings;
 
@@ -545,8 +545,8 @@ void amdgpu_command_submission_const_fill_helper(amdgpu_device_handle device,
 	igt_assert_eq(r, 0);
 
 	if (user_queue)
-		available_rings = ring_context->hw_ip_info.num_userq_slots ?
-			((1 << ring_context->hw_ip_info.num_userq_slots) -1) : 1;
+		available_rings = ring_context->hw_ip_info.userq_num_slots ?
+			((1 << ring_context->hw_ip_info.userq_num_slots) -1) : 1;
 	else
 		available_rings = ring_context->hw_ip_info.available_rings;
 
@@ -656,8 +656,8 @@ void amdgpu_command_submission_copy_linear_helper(amdgpu_device_handle device,
 	igt_assert_eq(r, 0);
 
 	if (user_queue)
-		available_rings = ring_context->hw_ip_info.num_userq_slots ?
-			((1 << ring_context->hw_ip_info.num_userq_slots) -1) : 1;
+		available_rings = ring_context->hw_ip_info.userq_num_slots ?
+			((1 << ring_context->hw_ip_info.userq_num_slots) -1) : 1;
 	else
 		available_rings = ring_context->hw_ip_info.available_rings;
 
@@ -1466,7 +1466,7 @@ bool cmd_ring_available(amdgpu_device_handle device,
 
 	if (user_queue) {
 		/* For user queues, check user queue slots */
-		uint32_t userq_slots = hw_ip_info.num_userq_slots;
+		uint32_t userq_slots = hw_ip_info.userq_num_slots;
 
 		return (ring_id < userq_slots);
 	} else {
@@ -1490,7 +1490,7 @@ uint32_t cmd_get_available_rings(amdgpu_device_handle device,
 		return 0;
 
 	if (user_queue) {
-		return hw_ip_info.num_userq_slots;
+		return hw_ip_info.userq_num_slots;
 	} else {
 		return __builtin_popcountll(hw_ip_info.available_rings);
 	}

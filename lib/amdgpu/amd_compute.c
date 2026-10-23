@@ -58,8 +58,8 @@ void amdgpu_command_submission_nop(amdgpu_device_handle device, enum amd_ip_bloc
 	igt_assert_eq(r, 0);
 
 	if (user_queue)
-		available_rings = ring_context->hw_ip_info.num_userq_slots ?
-			((1 << ring_context->hw_ip_info.num_userq_slots) -1) : 1;
+		available_rings = ring_context->hw_ip_info.userq_num_slots ?
+			((1 << ring_context->hw_ip_info.userq_num_slots) -1) : 1;
 	else
 		available_rings = ring_context->hw_ip_info.available_rings;
 

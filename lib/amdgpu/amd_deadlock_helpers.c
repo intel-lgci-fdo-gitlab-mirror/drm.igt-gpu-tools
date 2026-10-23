@@ -920,8 +920,8 @@ void bad_access_ring_helper(amdgpu_device_handle device_handle, unsigned int cmd
 	igt_assert_eq(r, 0);
 
 	if (user_queue)
-		available_rings = info.num_userq_slots ?
-			((1 << info.num_userq_slots) -1) : 1;
+		available_rings = info.userq_num_slots ?
+			((1 << info.userq_num_slots) -1) : 1;
 	else
 		available_rings = info.available_rings;
 

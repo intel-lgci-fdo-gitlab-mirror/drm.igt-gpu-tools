@@ -275,6 +275,18 @@ amdgpu_dma_default_bytes(const struct amdgpu_dma_limits *lim,
 	}
 }
 
+/*
+ * libdrm exposes this legacy name although the kernel UAPI now calls the
+ * corresponding container drm_amdgpu_info_uq_metadata.
+ */
+struct drm_amdgpu_info_uq_fw_areas {
+	union {
+		struct drm_amdgpu_info_uq_metadata_gfx gfx;
+		struct drm_amdgpu_info_uq_metadata_compute compute;
+		struct drm_amdgpu_info_uq_metadata_sdma sdma;
+	};
+};
+
 /* aux struct to hold misc parameters for convenience to maintain */
 struct amdgpu_ring_context {
 

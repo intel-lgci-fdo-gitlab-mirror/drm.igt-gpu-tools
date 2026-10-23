@@ -1668,20 +1668,6 @@ struct drm_amdgpu_info_uq_metadata {
 	};
 };
 
-/* Preserve the libdrm public type until the compatibility wrapper is moved into IGT. */
-struct drm_amdgpu_info_uq_fw_areas_gfx {
-	__u32 shadow_size;
-	__u32 shadow_alignment;
-	__u32 csa_size;
-	__u32 csa_alignment;
-};
-
-struct drm_amdgpu_info_uq_fw_areas {
-	union {
-		struct drm_amdgpu_info_uq_fw_areas_gfx gfx;
-	};
-};
-
 /*
  * Supported GPU families
  */

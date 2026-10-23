@@ -28,6 +28,7 @@ if libdrm_amdgpu.found()
 			  'amd_jpeg_dec',
 			  'amd_jpeg_queue',
 			  'amd_link_settings',
+			  'amd_list_handles',
 			  'amd_lockdep',
 			  'amd_max_bpc',
 			  'amd_mem_leak',
@@ -53,9 +54,9 @@ if libdrm_amdgpu.found()
 			  'amd_subvp',
 			  'amd_mem',
 			  'amd_remote_mem',
-                          'amd_userptr_invalidation',
-                          'amd_close_race',
-                          'amd_mes_reset',
+			  'amd_userptr_invalidation',
+			  'amd_close_race',
+			  'amd_mes_reset',
 			]
 	if libdrm_amdgpu.version().version_compare('> 2.4.97')
 		amdgpu_progs +=[ 'amd_syncobj', ]

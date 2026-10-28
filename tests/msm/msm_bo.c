@@ -8,10 +8,7 @@
 #include "igt.h"
 #include "igt_msm.h"
 
-/*
- * Tests for MSM buffer object allocation and information
- * Tests DRM_IOCTL_MSM_GEM_NEW and DRM_IOCTL_MSM_GEM_INFO functionality
- */
+IGT_TEST_DESCRIPTION("MSM buffer object management");
 
 #define DEFAULT_BUFFER_SIZE 4096
 
@@ -73,8 +70,7 @@ int igt_main()
 
 		req.size = 0;
 
-		igt_assert_eq(igt_ioctl(dev->fd, DRM_IOCTL_MSM_GEM_NEW, &req), -1);
-		igt_assert_eq(errno, EINVAL);
+		do_ioctl_err(dev->fd, DRM_IOCTL_MSM_GEM_NEW, &req, EINVAL);
 	}
 
 	igt_describe("Test allocation with invalid flags (should fail)");
@@ -82,10 +78,9 @@ int igt_main()
 		struct drm_msm_gem_new req = { 0 };
 
 		req.size = DEFAULT_BUFFER_SIZE;
-		req.flags = ~0; /* Invalid flags */
+		req.flags = (1 << 25); /* Invalid flag bit outside MSM_BO_FLAGS */
 
-		igt_assert_eq(igt_ioctl(dev->fd, DRM_IOCTL_MSM_GEM_NEW, &req), -1);
-		igt_assert_eq(errno, EINVAL);
+		do_ioctl_err(dev->fd, DRM_IOCTL_MSM_GEM_NEW, &req, EINVAL);
 	}
 
 	igt_describe("Test allocation with unaligned size");
@@ -99,7 +94,9 @@ int igt_main()
 
 		igt_msm_bo_free(bo);
 	}
-		igt_describe("Get offset for valid BO");
+
+	/* Buffer Information Tests - Positive Cases */
+	igt_describe("Get offset for valid BO");
 	igt_subtest("bo-get-offset-valid") {
 		struct msm_bo *bo;
 		struct drm_msm_gem_info req = { 0 };
@@ -171,59 +168,6 @@ int igt_main()
 		igt_msm_bo_free(bo);
 	}
 
-	/* Buffer Information Tests - Negative Cases */
-	igt_describe("Get offset for invalid handle (expects ENOENT)");
-	igt_subtest("bo-get-offset-invalid") {
-		struct drm_msm_gem_info req = { 0 };
-		int ret;
-
-		req.handle = 0xDEADBEEF; /* Invalid handle */
-		req.info = MSM_INFO_GET_OFFSET;
-
-		ret = igt_ioctl(dev->fd, DRM_IOCTL_MSM_GEM_INFO, &req);
-		igt_assert_eq(ret, -1);
-		igt_assert_eq(errno, ENOENT);
-
-		igt_info("Correctly rejected invalid handle with ENOENT\n");
-	}
-
-	igt_describe("Get IOVA for invalid handle (expects ENOENT)");
-	igt_subtest("bo-get-iova-invalid") {
-		struct drm_msm_gem_info req = { 0 };
-		int ret;
-
-		req.handle = 0xDEADBEEF; /* Invalid handle */
-		req.info = MSM_INFO_GET_IOVA;
-
-		ret = igt_ioctl(dev->fd, DRM_IOCTL_MSM_GEM_INFO, &req);
-		igt_assert_eq(ret, -1);
-		igt_assert_eq(errno, ENOENT);
-
-		igt_info("Correctly rejected invalid handle with ENOENT\n");
-	}
-
-	igt_describe("Use invalid info type (expects EINVAL)");
-	igt_subtest("bo-invalid-info-type") {
-		struct msm_bo *bo;
-		struct drm_msm_gem_info req = { 0 };
-		int ret;
-
-		bo = igt_msm_bo_new(dev, DEFAULT_BUFFER_SIZE, MSM_BO_WC);
-		igt_assert_f(bo, "Failed to allocate buffer object\n");
-
-		req.handle = bo->handle;
-		req.info = 0xFFFFFFFF; /* Invalid info type */
-
-		ret = igt_ioctl(dev->fd, DRM_IOCTL_MSM_GEM_INFO, &req);
-		igt_assert_eq(ret, -1);
-		igt_assert_eq(errno, EINVAL);
-
-		igt_info("Correctly rejected invalid info type with EINVAL\n");
-
-		igt_msm_bo_free(bo);
-	}
-
-	/* Additional Buffer Information Tests */
 	igt_describe("Verify offset consistency across multiple queries");
 	igt_subtest("bo-get-offset-consistency") {
 		struct msm_bo *bo;
@@ -337,7 +281,7 @@ int igt_main()
 			{ MSM_BO_CACHED_COHERENT, "CACHED_COHERENT", true }, /* May not be supported */
 		};
 
-		for (int i = 0; i < ARRAY_SIZE(test_cases); i++) {
+		for (unsigned int i = 0; i < ARRAY_SIZE(test_cases); i++) {
 			struct drm_msm_gem_new alloc_req = { 0 };
 			struct drm_msm_gem_info info_req = { 0 };
 			int ret;
@@ -367,12 +311,68 @@ int igt_main()
 				 (unsigned long long)info_req.value,
 				 test_cases[i].flags);
 
+			/*
+			 * MSM_BO_UNCACHED is deprecated in favour of MSM_BO_WC, so a
+			 * kernel that still accepts it may report either cache mode.
+			 */
+			if (test_cases[i].flags == MSM_BO_UNCACHED) {
+				uint64_t mode = info_req.value & MSM_BO_CACHE_MASK;
+
+				igt_assert_f(mode == MSM_BO_UNCACHED || mode == MSM_BO_WC,
+					     "Cache mode mismatch for %s\n", test_cases[i].name);
+				gem_close(dev->fd, alloc_req.handle);
+				continue;
+			}
+
 			/* Verify the cache mode flag is set */
 			igt_assert_f((info_req.value & MSM_BO_CACHE_MASK) == test_cases[i].flags,
 				     "Cache mode mismatch for %s\n", test_cases[i].name);
 
 			gem_close(dev->fd, alloc_req.handle);
 		}
+	}
+
+	/* Buffer Information Tests - Negative Cases */
+	igt_describe("Get offset for invalid handle (expects ENOENT)");
+	igt_subtest("bo-get-offset-invalid") {
+		struct drm_msm_gem_info req = { 0 };
+
+		req.handle = 0xDEADBEEF; /* Invalid handle */
+		req.info = MSM_INFO_GET_OFFSET;
+
+		do_ioctl_err(dev->fd, DRM_IOCTL_MSM_GEM_INFO, &req, ENOENT);
+
+		igt_info("Correctly rejected invalid handle with ENOENT\n");
+	}
+
+	igt_describe("Get IOVA for invalid handle (expects ENOENT)");
+	igt_subtest("bo-get-iova-invalid") {
+		struct drm_msm_gem_info req = { 0 };
+
+		req.handle = 0xDEADBEEF; /* Invalid handle */
+		req.info = MSM_INFO_GET_IOVA;
+
+		do_ioctl_err(dev->fd, DRM_IOCTL_MSM_GEM_INFO, &req, ENOENT);
+
+		igt_info("Correctly rejected invalid handle with ENOENT\n");
+	}
+
+	igt_describe("Use invalid info type (expects EINVAL)");
+	igt_subtest("bo-invalid-info-type") {
+		struct msm_bo *bo;
+		struct drm_msm_gem_info req = { 0 };
+
+		bo = igt_msm_bo_new(dev, DEFAULT_BUFFER_SIZE, MSM_BO_WC);
+		igt_assert_f(bo, "Failed to allocate buffer object\n");
+
+		req.handle = bo->handle;
+		req.info = 0xFFFFFFFF; /* Invalid info type */
+
+		do_ioctl_err(dev->fd, DRM_IOCTL_MSM_GEM_INFO, &req, EINVAL);
+
+		igt_info("Correctly rejected invalid info type with EINVAL\n");
+
+		igt_msm_bo_free(bo);
 	}
 
 	igt_fixture() {

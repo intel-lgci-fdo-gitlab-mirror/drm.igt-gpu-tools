@@ -205,6 +205,21 @@
  * @4-tiled:    4-tiled
  */
 
+/**
+ * SUBTEST: plane-upscale-max-crc-%s
+ * Description: Probe the maximum horizontal and vertical plane upscaling
+ *              factor for %arg[1] for each supported pixel format and verify
+ *              the upscaled framebuffer renders correctly via crc.
+ *
+ * arg[1]:
+ *
+ * @linear:     linear
+ * @x-tiled:    X-tiled
+ * @y-tiled:    Y-tiled
+ * @yf-tiled:   Yf-tiled
+ * @4-tiled:    4-tiled
+ */
+
 IGT_TEST_DESCRIPTION("Test display plane scaling");
 
 enum scaler_combo_test_type {
@@ -728,7 +743,7 @@ static const uint64_t modifiers[] = {
 static const struct {
 	uint64_t modifier;
 	const char *name;
-} downscale_modifiers[] = {
+} scale_modifiers[] = {
 	{ DRM_FORMAT_MOD_LINEAR,	"linear" },
 	{ I915_FORMAT_MOD_X_TILED,	"x-tiled" },
 	{ I915_FORMAT_MOD_Y_TILED,	"y-tiled" },
@@ -778,90 +793,9 @@ static void yuv_src_alignment(data_t *d, uint32_t format, igt_rotation_t rot,
 	*valign = vsub;
 }
 
-static int
-find_max_downscale_src_size(data_t *d, igt_plane_t *plane,
-			    uint32_t format, uint64_t modifier,
-			    bool scale_width, int dst_w, int dst_h,
-			    int align)
-{
-	igt_display_t *display = &d->display;
-	struct igt_fb probe_fb = {};
-	drmModeRes *res;
-	int fixed = scale_width ? dst_h : dst_w;
-	int dst = scale_width ? dst_w : dst_h;
-	int fb_cap;
-	int lo, hi, best;
-	int ret;
-
-	igt_assert(align >= 1);
-
-	res = drmModeGetResources(display->drm_fd);
-	igt_assert(res);
-	fb_cap = ALIGN_DOWN(scale_width ? res->max_width : res->max_height, align);
-	drmModeFreeResources(res);
-
-	igt_create_fb(display->drm_fd,
-		      scale_width ? fb_cap : fixed,
-		      scale_width ? fixed : fb_cap,
-		      format, modifier, &probe_fb);
-
-	igt_plane_set_fb(plane, &probe_fb);
-	igt_plane_set_position(plane, 0, 0);
-	igt_plane_set_size(plane, dst_w, dst_h);
-
-	/* Baseline: the unscaled 1:1 source must be accepted. */
-	best = ALIGN(dst, align);
-	igt_fb_set_position(&probe_fb, plane, 0, 0);
-	igt_fb_set_size(&probe_fb, plane,
-			scale_width ? best : fixed,
-			scale_width ? fixed : best);
-	ret = igt_display_try_commit_atomic(display,
-					    DRM_MODE_ATOMIC_TEST_ONLY |
-					    DRM_MODE_ATOMIC_ALLOW_MODESET,
-					    NULL);
-	if (ret) {
-		igt_debug("Unscaled %dx%d source rejected (ret=%d)\n",
-			  scale_width ? best : fixed,
-			  scale_width ? fixed : best, ret);
-		igt_plane_set_fb(plane, NULL);
-		igt_remove_fb(display->drm_fd, &probe_fb);
-		return ret;
-	}
-
-	lo = best + align;
-	hi = fb_cap;
-	while (lo <= hi) {
-		int mid = ALIGN_DOWN(lo + (hi - lo) / 2, align);
-
-		igt_fb_set_position(&probe_fb, plane, 0, 0);
-		igt_fb_set_size(&probe_fb, plane,
-				scale_width ? mid : fixed,
-				scale_width ? fixed : mid);
-
-		ret = igt_display_try_commit_atomic(display,
-						    DRM_MODE_ATOMIC_TEST_ONLY |
-						    DRM_MODE_ATOMIC_ALLOW_MODESET,
-						    NULL);
-		if (ret == 0) {
-			best = mid;
-			lo = mid + align;
-		} else {
-			hi = mid - align;
-		}
-	}
-
-	igt_debug("Max downscale source %s for dst %dx%d: %d (fixed axis %d)\n",
-		  scale_width ? "width" : "height", dst_w, dst_h, best, fixed);
-
-	igt_plane_set_fb(plane, NULL);
-	igt_remove_fb(display->drm_fd, &probe_fb);
-
-	return best;
-}
-
-static bool downscale_format_wanted(data_t *d, igt_plane_t *plane,
-				    uint32_t format, uint64_t modifier,
-				    struct igt_vec *tested_formats)
+static bool scale_format_wanted(data_t *d, igt_plane_t *plane,
+				uint32_t format, uint64_t modifier,
+				struct igt_vec *tested_formats)
 {
 	uint32_t reduced;
 
@@ -885,6 +819,114 @@ static bool downscale_format_wanted(data_t *d, igt_plane_t *plane,
 	}
 
 	return true;
+}
+
+enum scale_dir {
+	SCALE_DOWN = 0,
+	SCALE_UP,
+};
+
+static const char *scale_dir_name(enum scale_dir dir)
+{
+	return dir == SCALE_DOWN ? "downscale" : "upscale";
+}
+
+static int scale_src_cap(data_t *d, enum scale_dir dir, bool scale_width,
+			 int dst_scaled, int align)
+{
+	drmModeRes *res;
+	int cap;
+
+	if (dir == SCALE_UP)
+		return ALIGN(dst_scaled, align);
+
+	res = drmModeGetResources(d->drm_fd);
+	igt_assert(res);
+	cap = ALIGN_DOWN(scale_width ? res->max_width : res->max_height, align);
+	drmModeFreeResources(res);
+
+	return cap;
+}
+
+static int
+find_scale_src_limit(data_t *d, igt_plane_t *plane, struct igt_fb *fb,
+		     enum scale_dir dir, bool scale_width,
+		     int dst_w, int dst_h, int align, int cap)
+{
+	igt_display_t *display = &d->display;
+	int fixed = scale_width ? dst_h : dst_w;
+	int dst = scale_width ? dst_w : dst_h;
+	int lo, hi, best;
+	int ret;
+
+	igt_assert(align >= 1);
+
+	igt_plane_set_fb(plane, fb);
+	igt_plane_set_position(plane, 0, 0);
+	igt_plane_set_size(plane, dst_w, dst_h);
+
+	/* Baseline: the unscaled 1:1 source must be accepted. */
+	best = ALIGN(dst, align);
+	igt_fb_set_position(fb, plane, 0, 0);
+	igt_fb_set_size(fb, plane,
+			scale_width ? best : fixed,
+			scale_width ? fixed : best);
+	ret = igt_display_try_commit_atomic(display,
+					    DRM_MODE_ATOMIC_TEST_ONLY |
+					    DRM_MODE_ATOMIC_ALLOW_MODESET,
+					    NULL);
+	if (ret) {
+		igt_debug("Unscaled %dx%d source rejected (ret=%d)\n",
+			  scale_width ? best : fixed,
+			  scale_width ? fixed : best, ret);
+		igt_plane_set_fb(plane, NULL);
+		return ret;
+	}
+
+	if (dir == SCALE_DOWN) {
+		lo = best + align;
+		hi = cap;
+	} else {
+		lo = align;
+		hi = best - align;
+	}
+
+	while (lo <= hi) {
+		int mid = lo + (hi - lo) / 2;
+
+		mid = (dir == SCALE_DOWN) ? ALIGN_DOWN(mid, align) :
+					    ALIGN(mid, align);
+
+		igt_fb_set_position(fb, plane, 0, 0);
+		igt_fb_set_size(fb, plane,
+				scale_width ? mid : fixed,
+				scale_width ? fixed : mid);
+
+		ret = igt_display_try_commit_atomic(display,
+						    DRM_MODE_ATOMIC_TEST_ONLY |
+						    DRM_MODE_ATOMIC_ALLOW_MODESET,
+						    NULL);
+		if (ret == 0) {
+			best = mid;
+			if (dir == SCALE_DOWN)
+				lo = mid + align;
+			else
+				hi = mid - align;
+		} else {
+			if (dir == SCALE_DOWN)
+				hi = mid - align;
+			else
+				lo = mid + align;
+		}
+	}
+
+	igt_debug("%s limit source %s for dst %dx%d: %d (fixed axis %d)\n",
+		  scale_dir_name(dir), scale_width ? "width" : "height",
+		  dst_w, dst_h, best, fixed);
+
+	igt_plane_set_fb(plane, NULL);
+
+	return best;
 }
 
 #define LUT_MASK 0xf800
@@ -918,13 +960,14 @@ static void set_legacy_lut(data_t *data, igt_crtc_t *crtc,
 struct scale_axis {
 	const char *name;
 	bool scale_width;
+	struct igt_fb fb;
 	int dst_w, dst_h, dst_scaled, limit;
 	bool tested, failed;
 };
 
 static void
-check_one_downscale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
-			    uint32_t format, uint64_t modifier)
+check_one_scale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
+			uint32_t format, uint64_t modifier, enum scale_dir dir)
 {
 	igt_display_t *display = &d->display;
 	const int band = 64;
@@ -969,6 +1012,8 @@ check_one_downscale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
 	/* Search both axes first so the CRC phase only commits known limits. */
 	for (int i = 0; i < ARRAY_SIZE(axes); i++) {
 		struct scale_axis *a = &axes[i];
+		int align = a->scale_width ? halign : valign;
+		int cap;
 		size_t used;
 
 		/* dst is a thin band spanning the whole scaled axis */
@@ -976,16 +1021,25 @@ check_one_downscale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
 		a->dst_h = ALIGN(a->scale_width ? band : mode.vdisplay, valign);
 		a->dst_scaled = a->scale_width ? a->dst_w : a->dst_h;
 
-		a->limit = find_max_downscale_src_size(d, plane, format,
-						       modifier,
-						       a->scale_width,
-						       a->dst_w, a->dst_h,
-						       a->scale_width ?
-						       halign : valign);
-		if (a->limit < 0 || a->limit <= a->dst_scaled) {
-			igt_debug("No %s downscaling headroom "
-				  "(max src %d, dst %d)\n",
-				  a->name, a->limit, a->dst_scaled);
+		cap = scale_src_cap(d, dir, a->scale_width, a->dst_scaled,
+				    align);
+
+		/* Every probed and committed source is a crop of this fb. */
+		igt_create_color_fb(display->drm_fd,
+				    a->scale_width ? cap : a->dst_w,
+				    a->scale_width ? a->dst_h : cap,
+				    format, modifier, 0.0, 1.0, 0.0, &a->fb);
+
+		a->limit = find_scale_src_limit(d, plane, &a->fb, dir,
+						a->scale_width, a->dst_w,
+						a->dst_h, align, cap);
+		if (a->limit < 0 ||
+		    (dir == SCALE_DOWN ? a->limit <= a->dst_scaled :
+					 a->limit >= a->dst_scaled)) {
+			igt_debug("No %s %s headroom (limit src %d, dst %d)\n",
+				  a->name, scale_dir_name(dir),
+				  a->limit, a->dst_scaled);
+			igt_remove_fb(display->drm_fd, &a->fb);
 			continue;
 		}
 
@@ -996,85 +1050,78 @@ check_one_downscale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
 		snprintf(limits + used, sizeof(limits) - used,
 			 "%s%s src %d -> dst %d (%.2fx)", used ? ", " : "",
 			 a->name, a->limit, a->dst_scaled,
-			 (double)a->limit / a->dst_scaled);
+			 dir == SCALE_DOWN ?
+			 (double)a->limit / a->dst_scaled :
+			 (double)a->dst_scaled / a->limit);
 	}
 
 	if (!any_tested) {
 		if (mask_lut)
 			set_legacy_lut(d, crtc, 0xffff);
-		igt_skip("No downscaling headroom on either axis for "
-			 IGT_FORMAT_FMT " " IGT_MODIFIER_FMT "\n",
+		igt_skip("No %s headroom on either axis for " IGT_FORMAT_FMT
+			 " " IGT_MODIFIER_FMT "\n", scale_dir_name(dir),
 			 IGT_FORMAT_ARGS(format), IGT_MODIFIER_ARGS(modifier));
 	}
 
-	igt_info("Max downscale for " IGT_FORMAT_FMT " " IGT_MODIFIER_FMT
-		 ": %s\n", IGT_FORMAT_ARGS(format),
+	igt_info("Max %s for " IGT_FORMAT_FMT " " IGT_MODIFIER_FMT ": %s\n",
+		 scale_dir_name(dir), IGT_FORMAT_ARGS(format),
 		 IGT_MODIFIER_ARGS(modifier), limits);
 
 	pipe_crc = igt_crtc_crc_new(crtc, IGT_PIPE_CRC_SOURCE_AUTO);
 
 	for (int i = 0; i < ARRAY_SIZE(axes); i++) {
 		struct scale_axis *a = &axes[i];
-		struct igt_fb ref_fb = {}, src_fb = {};
 
 		if (!a->tested)
 			continue;
 
-		/* Reference: unscaled solid-green fb of the dst size. */
-		igt_create_color_fb(display->drm_fd, a->dst_w, a->dst_h,
-				    format, modifier, 0.0, 1.0, 0.0, &ref_fb);
-		igt_plane_set_fb(plane, &ref_fb);
-		igt_fb_set_position(&ref_fb, plane, 0, 0);
-		igt_fb_set_size(&ref_fb, plane, a->dst_w, a->dst_h);
+		/* Reference: unscaled crop of exactly the destination size. */
+		igt_plane_set_fb(plane, &a->fb);
+		igt_fb_set_position(&a->fb, plane, 0, 0);
+		igt_fb_set_size(&a->fb, plane, a->dst_w, a->dst_h);
 		igt_plane_set_position(plane, 0, 0);
 		igt_plane_set_size(plane, a->dst_w, a->dst_h);
 		igt_display_commit2(display, COMMIT_ATOMIC);
 		igt_pipe_crc_collect_crc(pipe_crc, &ref_crc);
 
-		/* Test: larger solid-green source downscaled into dst. */
-		igt_create_color_fb(display->drm_fd,
-				    a->scale_width ? a->limit : a->dst_w,
-				    a->scale_width ? a->dst_h : a->limit,
-				    format, modifier, 0.0, 1.0, 0.0, &src_fb);
-		igt_plane_set_fb(plane, &src_fb);
-		igt_fb_set_position(&src_fb, plane, 0, 0);
-		igt_fb_set_size(&src_fb, plane,
+		/* Test: limit sized crop scaled into the same rectangle. */
+		igt_fb_set_position(&a->fb, plane, 0, 0);
+		igt_fb_set_size(&a->fb, plane,
 				a->scale_width ? a->limit : a->dst_w,
 				a->scale_width ? a->dst_h : a->limit);
-		igt_plane_set_position(plane, 0, 0);
-		igt_plane_set_size(plane, a->dst_w, a->dst_h);
 		igt_display_commit2(display, COMMIT_ATOMIC);
 		igt_pipe_crc_collect_crc(pipe_crc, &scaled_crc);
 
-		igt_plane_set_fb(plane, NULL);
-		igt_remove_fb(display->drm_fd, &ref_fb);
-		igt_remove_fb(display->drm_fd, &src_fb);
-
 		a->failed = !igt_check_crc_equal(&ref_crc, &scaled_crc);
 		if (a->failed)
-			igt_critical("CRC mismatch on %s downscale\n", a->name);
+			igt_critical("CRC mismatch on %s %s\n",
+				     a->name, scale_dir_name(dir));
 	}
 
+	igt_plane_set_fb(plane, NULL);
 	igt_display_commit2(display, COMMIT_ATOMIC);
 
 	igt_reset_fifo_underrun_reporting(display->drm_fd);
 
 	igt_pipe_crc_free(pipe_crc);
+	for (int i = 0; i < ARRAY_SIZE(axes); i++)
+		igt_remove_fb(display->drm_fd, &axes[i].fb);
 
 	if (mask_lut)
 		set_legacy_lut(d, crtc, 0xffff);
 
 	igt_assert_f(!(axes[0].failed || axes[1].failed) ||
 		     igt_skip_crc_compare,
-		     "%s%s%s downscale CRC mismatch\n",
+		     "%s%s%s %s CRC mismatch\n",
 		     axes[0].failed ? axes[0].name : "",
 		     axes[0].failed && axes[1].failed ? " and " : "",
-		     axes[1].failed ? axes[1].name : "");
+		     axes[1].failed ? axes[1].name : "",
+		     scale_dir_name(dir));
 }
 
 static void
-test_downscale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
-		       uint64_t modifier)
+test_scale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
+		   uint64_t modifier, enum scale_dir dir)
 {
 	igt_plane_t *plane;
 	struct igt_vec tested_formats;
@@ -1088,8 +1135,8 @@ test_downscale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
 	for_each_plane_format(plane, format) {
 		char fname[32];
 
-		if (!downscale_format_wanted(d, plane, format, modifier,
-					     &tested_formats))
+		if (!scale_format_wanted(d, plane, format, modifier,
+					 &tested_formats))
 			continue;
 
 		format_name_lower(format, fname, sizeof(fname));
@@ -1097,8 +1144,8 @@ test_downscale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
 		/* Per-format dynamics keep dmesg within the log budget. */
 		igt_dynamic_f("pipe-%s-%s-%s", igt_crtc_name(crtc),
 			      igt_output_name(output), fname)
-			check_one_downscale_max_crc(d, crtc, output, format,
-						    modifier);
+			check_one_scale_max_crc(d, crtc, output, format,
+						modifier, dir);
 	}
 
 	igt_vec_fini(&tested_formats);
@@ -1757,7 +1804,7 @@ find_native_res_crtc_output(data_t *d, igt_crtc_t **found_crtc,
 		return false;
 
 	igt_debug("Selected pipe %s output %s (native mode %dx%d) for "
-		  "downscale testing\n",
+		  "max scaling testing\n",
 		  igt_crtc_name(*found_crtc), igt_output_name(*found_output),
 		  (*found_output)->config.default_mode.hdisplay,
 		  (*found_output)->config.default_mode.vdisplay);
@@ -2060,8 +2107,8 @@ int igt_main_args("", long_opts, help_str, opt_handler, &data)
 			}
 		}
 
-		for (int m = 0; m < ARRAY_SIZE(downscale_modifiers); m++) {
-			uint64_t modifier = downscale_modifiers[m].modifier;
+		for (int m = 0; m < ARRAY_SIZE(scale_modifiers); m++) {
+			uint64_t modifier = scale_modifiers[m].modifier;
 
 			igt_describe("Probe the maximum horizontal and vertical "
 				     "plane downscaling factor for each supported "
@@ -2069,7 +2116,7 @@ int igt_main_args("", long_opts, help_str, opt_handler, &data)
 				     "output matches an unscaled reference using "
 				     "CRCs.");
 			igt_subtest_with_dynamic_f("plane-downscale-max-crc-%s",
-						   downscale_modifiers[m].name) {
+						   scale_modifiers[m].name) {
 				igt_crtc_t *sel_crtc;
 				igt_output_t *sel_output;
 
@@ -2077,8 +2124,26 @@ int igt_main_args("", long_opts, help_str, opt_handler, &data)
 									&sel_crtc,
 									&sel_output));
 
-				test_downscale_max_crc(&data, sel_crtc,
-						       sel_output, modifier);
+				test_scale_max_crc(&data, sel_crtc, sel_output,
+						   modifier, SCALE_DOWN);
+			}
+
+			igt_describe("Probe the maximum horizontal and vertical "
+				     "plane upscaling factor for each supported "
+				     "pixel format and verify the upscaled "
+				     "output matches an unscaled reference using "
+				     "CRCs.");
+			igt_subtest_with_dynamic_f("plane-upscale-max-crc-%s",
+						   scale_modifiers[m].name) {
+				igt_crtc_t *sel_crtc;
+				igt_output_t *sel_output;
+
+				igt_require(find_native_res_crtc_output(&data,
+									&sel_crtc,
+									&sel_output));
+
+				test_scale_max_crc(&data, sel_crtc, sel_output,
+						   modifier, SCALE_UP);
 			}
 		}
 	}

@@ -95,6 +95,45 @@ int igt_main()
 		igt_msm_bo_free(bo);
 	}
 
+	igt_describe("Test MSM_BO_CACHED_COHERENT on A6xx+ GPUs");
+	igt_subtest("bo-alloc-cached-coherent") {
+		struct drm_msm_gem_new req = { 0 };
+		int ret;
+
+		/* MSM_BO_CACHED_COHERENT is only supported on A6xx and newer GPUs */
+		igt_require(dev->gen >= 6);
+
+		req.size = DEFAULT_BUFFER_SIZE;
+		req.flags = MSM_BO_CACHED_COHERENT;
+
+		ret = igt_ioctl(dev->fd, DRM_IOCTL_MSM_GEM_NEW, &req);
+
+		if (ret == 0) {
+			struct drm_msm_gem_info info_req = { 0 };
+
+			igt_info("MSM_BO_CACHED_COHERENT supported on A%dxx GPU\n", dev->gen);
+
+			/* Verify flags */
+			info_req.handle = req.handle;
+			info_req.info = MSM_INFO_GET_FLAGS;
+			ret = igt_ioctl(dev->fd, DRM_IOCTL_MSM_GEM_INFO, &info_req);
+			igt_assert_eq(ret, 0);
+
+			igt_assert_f((info_req.value & MSM_BO_CACHE_MASK) == MSM_BO_CACHED_COHERENT,
+				     "Cache mode mismatch for CACHED_COHERENT\n");
+
+			igt_info("CACHED_COHERENT BO flags: 0x%llx (expected 0x%x)\n",
+				 (unsigned long long)info_req.value,
+				 MSM_BO_CACHED_COHERENT);
+
+			gem_close(dev->fd, req.handle);
+		} else {
+			igt_assert_eq(errno, EINVAL);
+			igt_info("MSM_BO_CACHED_COHERENT not supported on A%dxx GPU "
+				 "(EINVAL)\n", dev->gen);
+		}
+	}
+
 	/* Buffer Information Tests - Positive Cases */
 	igt_describe("Get offset for valid BO");
 	igt_subtest("bo-get-offset-valid") {

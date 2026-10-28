@@ -885,8 +885,9 @@ static int scale_src_cap(data_t *d, enum scale_dir dir, bool src_width,
 	drmModeRes *res;
 	int cap;
 
+	/* Room for the overlay's opposite-direction 2x downscale. */
 	if (dir == SCALE_UP)
-		return ALIGN(dst_scaled, align);
+		return ALIGN(2 * dst_scaled, align);
 
 	res = drmModeGetResources(d->drm_fd);
 	igt_assert(res);
@@ -1193,7 +1194,7 @@ check_one_scale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
 		/* The overlay band sits right next to the primary band. */
 		int ox = a->scale_width ? 0 : a->dst_w;
 		int oy = a->scale_width ? a->dst_h : 0;
-		int ovl_limit;
+		int ovl_limit, opp;
 
 		if (!a->tested)
 			continue;
@@ -1257,6 +1258,25 @@ check_one_scale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
 			igt_info("Primary and overlay %s %s at their limits "
 				 "rejected together\n",
 				 a->name, scale_dir_name(dir));
+		}
+
+		/* Overlay scaled 2x the other way, primary at its limit. */
+		opp = ALIGN(dir == SCALE_DOWN ? a->dst_scaled / 2 :
+						a->dst_scaled * 2, a->align);
+		scale_plane_set(plane, a, rot, a->limit, 0, 0);
+		scale_plane_set(overlay, a, rot, opp, ox, oy);
+		if (scale_try_commit(display)) {
+			igt_display_commit2(display, COMMIT_ATOMIC);
+			igt_pipe_crc_collect_crc(pipe_crc, &crc);
+			scale_crc_check(&both_ref_crc, &crc, a->name,
+					"primary+overlay opposite", failures,
+					sizeof(failures));
+		} else {
+			igt_info("Primary %s %s at its limit with overlay "
+				 "2x %s rejected\n", a->name,
+				 scale_dir_name(dir),
+				 scale_dir_name(dir == SCALE_DOWN ?
+						SCALE_UP : SCALE_DOWN));
 		}
 
 		igt_plane_set_fb(overlay, NULL);

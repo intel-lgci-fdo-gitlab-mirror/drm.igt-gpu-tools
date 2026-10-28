@@ -901,7 +901,8 @@ struct scale_axis {
 	bool scale_width;
 	struct igt_fb fb;
 	int dst_w, dst_h, dst_scaled, limit;
-	bool tested, failed;
+	int align, cap;
+	bool tested;
 };
 
 /* 90/270 rotation swaps which source axis lands on the scaled dst axis. */
@@ -1024,6 +1025,50 @@ static void set_legacy_lut(data_t *data, igt_crtc_t *crtc,
 	free(lut);
 }
 
+static bool scale_has_headroom(enum scale_dir dir, int limit, int dst)
+{
+	if (limit < 0)
+		return false;
+
+	return dir == SCALE_DOWN ? limit > dst : limit < dst;
+}
+
+static void scale_plane_set(igt_plane_t *plane, struct scale_axis *a,
+			    igt_rotation_t rot, int len, int x, int y)
+{
+	int w, h;
+
+	scale_src_size(a, rot, len, &w, &h);
+	igt_plane_set_fb(plane, &a->fb);
+	igt_plane_set_rotation(plane, rot);
+	igt_fb_set_position(&a->fb, plane, 0, 0);
+	igt_fb_set_size(&a->fb, plane, w, h);
+	igt_plane_set_position(plane, x, y);
+	igt_plane_set_size(plane, a->dst_w, a->dst_h);
+}
+
+static bool scale_try_commit(igt_display_t *display)
+{
+	return igt_display_try_commit_atomic(display,
+					     DRM_MODE_ATOMIC_TEST_ONLY |
+					     DRM_MODE_ATOMIC_ALLOW_MODESET,
+					     NULL) == 0;
+}
+
+static void scale_crc_check(const igt_crc_t *ref, const igt_crc_t *crc,
+			    const char *axis, const char *step,
+			    char *failures, size_t len)
+{
+	size_t used = strlen(failures);
+
+	if (igt_check_crc_equal(ref, crc))
+		return;
+
+	igt_critical("CRC mismatch on %s %s\n", axis, step);
+	snprintf(failures + used, len - used, "%s%s %s",
+		 used ? ", " : "", axis, step);
+}
+
 static void
 check_one_scale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
 			uint32_t format, uint64_t modifier, enum scale_dir dir,
@@ -1036,10 +1081,11 @@ check_one_scale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
 		{ .name = "vertical", .scale_width = false },
 	};
 	igt_pipe_crc_t *pipe_crc;
-	igt_crc_t ref_crc, scaled_crc;
+	igt_crc_t ref_crc, both_ref_crc, crc;
 	drmModeModeInfo mode;
-	igt_plane_t *plane;
-	int halign, valign, dalign;
+	igt_plane_t *plane, *overlay = NULL;
+	int halign, valign, dalign, num_scalers;
+	char failures[256] = "";
 	char limits[128] = "";
 	bool any_tested = false;
 	/* Pre-ver14 scalers round planar YUV differently from 1:1. */
@@ -1067,6 +1113,18 @@ check_one_scale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
 	plane = igt_output_get_plane_type(output, DRM_PLANE_TYPE_PRIMARY);
 	igt_require(plane);
 
+	if (igt_crtc_count_plane_type(crtc, DRM_PLANE_TYPE_OVERLAY) > 0)
+		overlay = igt_crtc_get_plane_type(crtc, DRM_PLANE_TYPE_OVERLAY);
+	if (overlay && (!igt_plane_has_format_mod(overlay, format, modifier) ||
+			!igt_plane_has_rotation(overlay, rot))) {
+		igt_debug("Overlay plane skipped, no " IGT_FORMAT_FMT " "
+			  IGT_MODIFIER_FMT " rotation %s support\n",
+			  IGT_FORMAT_ARGS(format), IGT_MODIFIER_ARGS(modifier),
+			  igt_plane_rotation_name(rot));
+		overlay = NULL;
+	}
+	num_scalers = igt_crtc_num_scalers(crtc);
+
 	yuv_src_alignment(d, format, rot, &halign, &valign);
 	/* Each dst side is also a source side at 1:1, possibly rotated. */
 	dalign = max(halign, valign);
@@ -1085,6 +1143,8 @@ check_one_scale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
 		a->dst_scaled = a->scale_width ? a->dst_w : a->dst_h;
 
 		cap = scale_src_cap(d, dir, src_width, a->dst_scaled, align);
+		a->align = align;
+		a->cap = cap;
 
 		/* Every probed and committed source is a crop of this fb. */
 		scale_src_size(a, rot, cap, &w, &h);
@@ -1093,9 +1153,7 @@ check_one_scale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
 
 		a->limit = find_scale_src_limit(d, plane, &a->fb, dir, a, rot,
 						align, cap);
-		if (a->limit < 0 ||
-		    (dir == SCALE_DOWN ? a->limit <= a->dst_scaled :
-					 a->limit >= a->dst_scaled)) {
+		if (!scale_has_headroom(dir, a->limit, a->dst_scaled)) {
 			igt_debug("No %s %s headroom (limit src %d, dst %d)\n",
 				  a->name, scale_dir_name(dir),
 				  a->limit, a->dst_scaled);
@@ -1132,36 +1190,81 @@ check_one_scale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
 
 	for (int i = 0; i < ARRAY_SIZE(axes); i++) {
 		struct scale_axis *a = &axes[i];
-		int w, h;
+		/* The overlay band sits right next to the primary band. */
+		int ox = a->scale_width ? 0 : a->dst_w;
+		int oy = a->scale_width ? a->dst_h : 0;
+		int ovl_limit;
 
 		if (!a->tested)
 			continue;
 
 		/* Reference: unscaled crop of exactly the destination size. */
-		scale_src_size(a, rot, a->dst_scaled, &w, &h);
-		igt_plane_set_fb(plane, &a->fb);
-		igt_plane_set_rotation(plane, rot);
-		igt_fb_set_position(&a->fb, plane, 0, 0);
-		igt_fb_set_size(&a->fb, plane, w, h);
-		igt_plane_set_position(plane, 0, 0);
-		igt_plane_set_size(plane, a->dst_w, a->dst_h);
+		scale_plane_set(plane, a, rot, a->dst_scaled, 0, 0);
 		igt_display_commit2(display, COMMIT_ATOMIC);
 		igt_pipe_crc_collect_crc(pipe_crc, &ref_crc);
 
-		/* Test: limit sized crop scaled into the same rectangle. */
-		scale_src_size(a, rot, a->limit, &w, &h);
-		igt_fb_set_position(&a->fb, plane, 0, 0);
-		igt_fb_set_size(&a->fb, plane, w, h);
+		/* Primary: limit sized crop scaled into the same rectangle. */
+		scale_plane_set(plane, a, rot, a->limit, 0, 0);
 		igt_display_commit2(display, COMMIT_ATOMIC);
-		igt_pipe_crc_collect_crc(pipe_crc, &scaled_crc);
+		igt_pipe_crc_collect_crc(pipe_crc, &crc);
+		scale_crc_check(&ref_crc, &crc, a->name, "primary",
+				failures, sizeof(failures));
 
-		a->failed = !igt_check_crc_equal(&ref_crc, &scaled_crc);
-		if (a->failed)
-			igt_critical("CRC mismatch on %s %s\n",
-				     a->name, scale_dir_name(dir));
+		if (!overlay)
+			continue;
+
+		/* Overlay alone in the primary's place, at primary's limit. */
+		igt_plane_set_fb(plane, NULL);
+		ovl_limit = a->limit;
+		scale_plane_set(overlay, a, rot, ovl_limit, 0, 0);
+		if (!scale_try_commit(display)) {
+			ovl_limit = find_scale_src_limit(d, overlay, &a->fb,
+							 dir, a, rot,
+							 a->align, a->cap);
+			igt_info("Overlay %s %s limit %d, primary %d\n",
+				 a->name, scale_dir_name(dir), ovl_limit,
+				 a->limit);
+			if (!scale_has_headroom(dir, ovl_limit,
+						a->dst_scaled))
+				continue;
+			scale_plane_set(overlay, a, rot, ovl_limit, 0, 0);
+		}
+		igt_display_commit2(display, COMMIT_ATOMIC);
+		igt_pipe_crc_collect_crc(pipe_crc, &crc);
+		scale_crc_check(&ref_crc, &crc, a->name, "overlay",
+				failures, sizeof(failures));
+
+		if (num_scalers < 2) {
+			igt_plane_set_fb(overlay, NULL);
+			continue;
+		}
+
+		/* Both planes scaled at once, each into its own band. */
+		scale_plane_set(plane, a, rot, a->dst_scaled, 0, 0);
+		scale_plane_set(overlay, a, rot, a->dst_scaled, ox, oy);
+		igt_display_commit2(display, COMMIT_ATOMIC);
+		igt_pipe_crc_collect_crc(pipe_crc, &both_ref_crc);
+
+		scale_plane_set(plane, a, rot, a->limit, 0, 0);
+		scale_plane_set(overlay, a, rot, ovl_limit, ox, oy);
+		if (scale_try_commit(display)) {
+			igt_display_commit2(display, COMMIT_ATOMIC);
+			igt_pipe_crc_collect_crc(pipe_crc, &crc);
+			scale_crc_check(&both_ref_crc, &crc, a->name,
+					"primary+overlay", failures,
+					sizeof(failures));
+		} else {
+			igt_info("Primary and overlay %s %s at their limits "
+				 "rejected together\n",
+				 a->name, scale_dir_name(dir));
+		}
+
+		igt_plane_set_fb(overlay, NULL);
 	}
 
 	igt_plane_set_fb(plane, NULL);
+	if (overlay)
+		igt_plane_set_fb(overlay, NULL);
 	igt_display_commit2(display, COMMIT_ATOMIC);
 
 	igt_reset_fifo_underrun_reporting(display->drm_fd);
@@ -1173,13 +1276,8 @@ check_one_scale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
 	if (mask_lut)
 		set_legacy_lut(d, crtc, 0xffff);
 
-	igt_assert_f(!(axes[0].failed || axes[1].failed) ||
-		     igt_skip_crc_compare,
-		     "%s%s%s %s CRC mismatch\n",
-		     axes[0].failed ? axes[0].name : "",
-		     axes[0].failed && axes[1].failed ? " and " : "",
-		     axes[1].failed ? axes[1].name : "",
-		     scale_dir_name(dir));
+	igt_assert_f(!failures[0] || igt_skip_crc_compare,
+		     "%s CRC mismatch on: %s\n", scale_dir_name(dir), failures);
 }
 
 static void

@@ -1128,7 +1128,6 @@ test_scale_max_crc(data_t *d, igt_crtc_t *crtc, igt_output_t *output,
 	uint32_t format;
 
 	plane = igt_crtc_get_plane_type(crtc, DRM_PLANE_TYPE_PRIMARY);
-	igt_require(plane);
 
 	igt_vec_init(&tested_formats, sizeof(uint32_t));
 
@@ -1769,47 +1768,42 @@ crtc_output_combo_valid(igt_display_t *display, igt_crtc_t *crtc,
 	return ret;
 }
 
-static bool
-find_native_res_crtc_output(data_t *d, igt_crtc_t **found_crtc,
-			    igt_output_t **found_output)
+static igt_output_t *
+scale_output_for_crtc(data_t *d, igt_crtc_t *crtc)
 {
 	igt_display_t *display = &d->display;
-	igt_crtc_t *crtc;
-	igt_output_t *output;
+	igt_output_t *output, *best = NULL;
 	uint64_t best_area = 0;
 
-	*found_crtc = NULL;
-	*found_output = NULL;
+	if (igt_crtc_num_scalers(crtc) < 1)
+		return NULL;
 
-	for_each_crtc_with_valid_output(display, crtc, output) {
-		drmModeModeInfo *mode;
-		uint64_t area;
+	for_each_valid_output_on_crtc(display, crtc, output) {
+		drmModeModeInfo *mode = &output->config.default_mode;
+		uint64_t area = (uint64_t)mode->hdisplay * mode->vdisplay;
 
-		if (!crtc_output_combo_valid(display, crtc, output))
-			continue;
-		if (igt_crtc_num_scalers(crtc) < 1)
-			continue;
-
-		mode = &output->config.default_mode;
-		area = (uint64_t)mode->hdisplay * mode->vdisplay;
-		if (area <= best_area)
+		if (area <= best_area ||
+		    !crtc_output_combo_valid(display, crtc, output))
 			continue;
 
 		best_area = area;
-		*found_crtc = crtc;
-		*found_output = output;
+		best = output;
 	}
 
-	if (!*found_crtc)
-		return false;
+	return best;
+}
 
-	igt_debug("Selected pipe %s output %s (native mode %dx%d) for "
-		  "max scaling testing\n",
-		  igt_crtc_name(*found_crtc), igt_output_name(*found_output),
-		  (*found_output)->config.default_mode.hdisplay,
-		  (*found_output)->config.default_mode.vdisplay);
+static void
+test_scale_max_crc_pipes(data_t *d, uint64_t modifier, enum scale_dir dir)
+{
+	igt_crtc_t *crtc;
 
-	return true;
+	for_each_crtc(&d->display, crtc) {
+		igt_output_t *output = scale_output_for_crtc(d, crtc);
+
+		if (output)
+			test_scale_max_crc(d, crtc, output, modifier, dir);
+	}
 }
 
 static int opt_handler(int opt, int opt_index, void *_data)
@@ -2116,17 +2110,9 @@ int igt_main_args("", long_opts, help_str, opt_handler, &data)
 				     "output matches an unscaled reference using "
 				     "CRCs.");
 			igt_subtest_with_dynamic_f("plane-downscale-max-crc-%s",
-						   scale_modifiers[m].name) {
-				igt_crtc_t *sel_crtc;
-				igt_output_t *sel_output;
-
-				igt_require(find_native_res_crtc_output(&data,
-									&sel_crtc,
-									&sel_output));
-
-				test_scale_max_crc(&data, sel_crtc, sel_output,
-						   modifier, SCALE_DOWN);
-			}
+						   scale_modifiers[m].name)
+				test_scale_max_crc_pipes(&data, modifier,
+							 SCALE_DOWN);
 
 			igt_describe("Probe the maximum horizontal and vertical "
 				     "plane upscaling factor for each supported "
@@ -2134,17 +2120,9 @@ int igt_main_args("", long_opts, help_str, opt_handler, &data)
 				     "output matches an unscaled reference using "
 				     "CRCs.");
 			igt_subtest_with_dynamic_f("plane-upscale-max-crc-%s",
-						   scale_modifiers[m].name) {
-				igt_crtc_t *sel_crtc;
-				igt_output_t *sel_output;
-
-				igt_require(find_native_res_crtc_output(&data,
-									&sel_crtc,
-									&sel_output));
-
-				test_scale_max_crc(&data, sel_crtc, sel_output,
-						   modifier, SCALE_UP);
-			}
+						   scale_modifiers[m].name)
+				test_scale_max_crc_pipes(&data, modifier,
+							 SCALE_UP);
 		}
 	}
 

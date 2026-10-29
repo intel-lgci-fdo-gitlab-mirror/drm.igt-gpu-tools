@@ -766,6 +766,20 @@ test_legacy_mode(int fd, uint32_t vm, uint64_t addr, uint64_t userptr,
 			do {
 				err = igt_ioctl(fd, DRM_IOCTL_XE_EXEC, &exec);
 			} while (err && errno == ENOMEM);
+		} else if (flags & HANG && flags & MULTI_QUEUE) {
+			int err;
+
+			/*
+			 * In multi-queue mode all queues share a single reset
+			 * domain. When the hang queue triggers a GPU reset the
+			 * sibling (non-hang) queues are reset as well and the
+			 * exec ioctl is rejected with -ECANCELED. This is
+			 * expected and should be handled gracefully.
+			 */
+			do {
+				err = __xe_exec(fd, &exec);
+			} while (err == -ENOMEM);
+			igt_assert(err == 0 || err == -ECANCELED);
 		} else {
 			xe_exec(fd, &exec);
 		}

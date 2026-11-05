@@ -14,6 +14,8 @@
 
 #include <limits.h>
 #include <dirent.h>
+#include <libudev.h>
+#include <poll.h>
 
 #include "igt.h"
 #include "igt_device.h"
@@ -27,6 +29,25 @@
 #include "xe/xe_ioctl.h"
 #include "xe/xe_query.h"
 #include "xe/xe_spin.h"
+
+static char pci_slot[NAME_MAX];
+
+static void cold_reset_restore(int sig)
+{
+	char path[PATH_MAX];
+	int dir;
+
+	snprintf(path, sizeof(path), "/sys/kernel/debug/dri/%s", pci_slot);
+	dir = open(path, O_RDONLY);
+	if (dir >= 0) {
+		igt_sysfs_write(dir, "wedge_cold_reset/probability", "0", 1);
+		igt_sysfs_write(dir, "wedge_cold_reset/times", "1", 1);
+		igt_debugfs_write(dir, "wedge_cold_reset/verbose", "2");
+		close(dir);
+	}
+
+	igt_kmod_rebind("xe", pci_slot);
+}
 
 static void ignore_wedged_in_dmesg(void)
 {
@@ -59,6 +80,7 @@ static void ignore_wedged_in_dmesg(void)
 				    "|GT[0-9A-Fa-f]*: Invalid gsc header in proxy reply"
 				    "|SIGID=[0-9]+ .*GT: reset failed"
 				    "|SIGID=102"
+				    "|cold-reset wedge injected"
 				    "|SIGID=203");
 }
 
@@ -69,6 +91,60 @@ static void force_wedged(int fd)
 
 	xe_force_gt_reset_async(fd, 0);
 	sleep(1);
+}
+
+static void wait_for_wedged_uevent(struct udev_monitor *mon)
+{
+	struct udev_device *dev;
+	const char *prop_val;
+	const char *dev_path;
+	struct pollfd poll_fd = {
+		.fd = udev_monitor_get_fd(mon),
+		.events = POLLIN
+	};
+	bool event_received = false;
+	int timeout_secs = 30;
+
+	igt_until_timeout(timeout_secs) {
+		if (poll(&poll_fd, 1, 1000) <= 0)
+			continue;
+
+		dev = udev_monitor_receive_device(mon);
+		if (!dev)
+			continue;
+
+		prop_val = udev_device_get_property_value(dev, "WEDGED");
+		dev_path = udev_device_get_property_value(dev, "DEVPATH");
+
+		if (prop_val && !strcmp(prop_val, "cold-reset")) {
+			event_received = true;
+			igt_assert_f(dev_path && strstr(dev_path, pci_slot),
+				     "Expected bus address '%s' to be part of DEVPATH '%s'",
+				     pci_slot, dev_path);
+			udev_device_unref(dev);
+			break;
+		}
+
+		udev_device_unref(dev);
+	}
+
+	igt_cleanup_uevents(mon);
+
+	igt_assert_f(event_received,
+		     "Timeout waiting for cold-reset-wedged event after %d seconds",
+		     timeout_secs);
+}
+
+static void test_spinner_after_recovery(int fd)
+{
+	uint64_t ahnd;
+	igt_spin_t *spin;
+
+	ahnd = intel_allocator_open(fd, 0, INTEL_ALLOCATOR_RELOC);
+	spin = igt_spin_new(fd, .ahnd = ahnd);
+
+	igt_spin_free(fd, spin);
+	put_ahnd(ahnd);
 }
 
 static int simple_ioctl(int fd)
@@ -233,11 +309,14 @@ simple_hang(int fd, struct drm_xe_sync *sync)
  * SUBTEST: basic-wedged-read
  * Description: Read wedged_mode debugfs
  */
+/**
+ * SUBTEST: cold-reset-wedged
+ * Description: Inject a cold reset wedge and validate cold-reset uevent
+ */
 int igt_main()
 {
 	struct drm_xe_engine_class_instance *hwe;
 	int fd;
-	char pci_slot[NAME_MAX];
 
 	igt_fixture() {
 		fd = drm_open_driver(DRIVER_XE);
@@ -334,10 +413,45 @@ int igt_main()
 		igt_assert_f(str[0] != '\0', "Failed to read wedged_mode from debugfs!\n");
 	}
 
+	igt_subtest_f("cold-reset-wedged") {
+		struct udev_monitor *mon;
+
+		errno = 0;
+		igt_skip_on_f(!IS_CRESCENTISLAND(intel_get_drm_devid(fd)),
+			      "cold-reset-wedged is only supported on Crescent Island (CRI)\n");
+		igt_require(igt_debugfs_exists(fd, "wedge_cold_reset/probability",
+					       O_RDWR));
+		igt_install_exit_handler(cold_reset_restore);
+
+		igt_debugfs_write(fd, "wedge_cold_reset/verbose", "1");
+		igt_debugfs_write(fd, "wedge_cold_reset/probability", "100");
+		igt_debugfs_write(fd, "wedge_cold_reset/times", "1");
+
+		ignore_wedged_in_dmesg();
+		mon = igt_watch_uevents();
+
+		drm_close_driver(fd);
+		igt_kmod_rebind("xe", pci_slot);
+		wait_for_wedged_uevent(mon);
+		/*
+		 * Rebind to restore device operation. The first wedge decrements
+		 * times to zero, disabling further fault injection even though
+		 * probability remains at 100.
+		 */
+		igt_kmod_rebind("xe", pci_slot);
+		fd = drm_open_driver(DRIVER_XE);
+		test_spinner_after_recovery(fd);
+	}
+
 	igt_fixture() {
 		if (igt_debugfs_exists(fd, "fail_gt_reset/probability", O_RDWR)) {
 			igt_debugfs_write(fd, "fail_gt_reset/probability", "0");
 			igt_debugfs_write(fd, "fail_gt_reset/times", "1");
+		}
+
+		if (igt_debugfs_exists(fd, "wedge_cold_reset/probability", O_RDWR)) {
+			igt_debugfs_write(fd, "wedge_cold_reset/probability", "0");
+			igt_debugfs_write(fd, "wedge_cold_reset/times", "1");
 		}
 
 		/* Tests might have failed, force a rebind before exiting */

@@ -553,7 +553,7 @@ void gpgpu_shader__breakpoint(struct gpgpu_shader *shdr)
 void gpgpu_shader__wait(struct gpgpu_shader *shdr)
 {
 	emit_iga64_code(shdr, sync_host, R"(
-(W)	sync.host	        null
+(W)	sync.host	null
 	)");
 }
 
@@ -580,20 +580,20 @@ void gpgpu_shader__eot(struct gpgpu_shader *shdr)
 {
 	if (shdr->vrt == VRT_96)
 		emit_iga64_code(shdr, eot_vrt, R"(
-(W)	mov (8|M0)               r80.0<1>:ud  r0.0<8;8,1>:ud
-(W)	send.gtwy (8|M0)         null r80 src1_null     0 0x02000000 {EOT}
+(W)	mov(8)		r80.0:ud	r0.0<8;8,1>:ud
+(W)	send.gtwy(8)	null		r80	src1_null	0	0x02000000	{EOT}
 		)");
 	else
 		emit_iga64_code(shdr, eot, R"(
-(W)	mov (8|M0)               r112.0<1>:ud  r0.0<8;8,1>:ud
+(W)	mov(8)		r112.0:ud	r0.0<8;8,1>:ud
 #if GFX_VER < 1250
-(W)	send.ts (16|M0)          null r112 null 0x10000000 0x02000010 {EOT,@1}
+(W)	send.ts(16)	null		r112	null		0x10000000	0x02000010	{EOT,@1}
 
 #elif GFX_VER <= 3000
-(W)	send.gtwy (8|M0)         null r112 src1_null     0 0x02000000 {EOT}
+(W)	send.gtwy(8)	null		r112	src1_null	0		0x02000000	{EOT}
 
 #else
-(W)	sendg.gtwy (1|M0)        null     r0:1  null:0  0x0 {EOT}
+(W)	sendg.gtwy(1)	null		r0:1	null:0		0x0		{EOT}
 #endif
 		)");
 }
@@ -653,7 +653,7 @@ void gpgpu_shader__jump(struct gpgpu_shader *shdr, int label_id)
 
 	shader_size = emit_iga64_code(shdr, jump, R"(
 L0:
-(W)	jmpi        L0
+(W)	jmpi		L0
 	)");
 
 	__patch_indexed_jump(shdr, label_id, shader_size);
@@ -676,12 +676,12 @@ void gpgpu_shader__jump_neq(struct gpgpu_shader *shdr, int label_id,
 
 	size = emit_iga64_code(shdr, jump_dw_neq, R"(
 L0:
-		SET_SHARED_SPACE_ADDR(r30, ARG(0):ud, 4)
-(W)		LOAD_SPACE_DW(r31, r30)
-	// clear the flag register
-(W)		mov (1|M0)               f0.0<1>:ud    0x0:ud
-(W)		cmp (1|M0)    (ne)f0.0   null<1>:ud     r31.0<0;1,0>:ud   ARG(1):ud
-(W&f0.0)	jmpi                     L0
+	SET_SHARED_SPACE_ADDR(r30, ARG(0):ud, 4)
+(W)	LOAD_SPACE_DW(r31, r30)
+// clear the flag register
+(W)	mov(1)		f0.0:ud		0x0:ud
+(W)	cmp(1)(ne)f0.0	null:ud		r31.0:ud	ARG(1):ud
+(W&f0.0)jmpi		L0
 	)", y_offset, value);
 
 	__patch_indexed_jump(shdr, label_id, size);
@@ -701,7 +701,7 @@ void gpgpu_shader__loop_begin(struct gpgpu_shader *shdr, int label_id)
 {
 	emit_iga64_code(shdr, clear_r40, R"(
 L0:
-(W)	mov (1|M0)               r40:ud    0x0:ud
+(W)	mov(1)		r40:ud	0x0:ud
 	)");
 
 	gpgpu_shader__label(shdr, label_id);
@@ -721,10 +721,10 @@ void gpgpu_shader__loop_end(struct gpgpu_shader *shdr, int label_id, uint32_t it
 
 	size = emit_iga64_code(shdr, inc_r40_jump_neq, R"(
 L0:
-(W)		add (1|M0)              r40:ud          r40.0<0;1,0>:ud 0x1:ud
-(W)		mov (1|M0)              f0.0<1>:ud      0x0:ud
-(W)		cmp (1|M0)    (ne)f0.0   null<1>:ud     r40.0<0;1,0>:ud   ARG(0):ud
-(W&f0.0)	jmpi                     L0
+(W)	add(1)		r40:ud		r40.0:ud	0x1:ud
+(W)	mov(1)		f0.0:ud		0x0:ud
+(W)	cmp(1)(ne)f0.0	null:ud		r40.0:ud	ARG(0):ud
+(W&f0.0)jmpi		L0
 	)", iter);
 
 	__patch_indexed_jump(shdr, label_id, size);
@@ -742,11 +742,11 @@ void gpgpu_shader__common_target_write(struct gpgpu_shader *shdr,
 				       uint32_t y_offset, const uint32_t value[4])
 {
 	emit_iga64_code(shdr, common_target_write, R"(
-(W)	mov (16|M0)		r31.0<1>:ud	0x0:ud
-(W)	mov (1|M0)		r31.0<1>:ud	ARG(1):ud
-(W)	mov (1|M0)		r31.1<1>:ud	ARG(2):ud
-(W)	mov (1|M0)		r31.2<1>:ud	ARG(3):ud
-(W)	mov (1|M0)		r31.3<1>:ud	ARG(4):ud
+(W)	mov(16)		r31.0:ud	0x0:ud
+(W)	mov(1)		r31.0:ud	ARG(1):ud
+(W)	mov(1)		r31.1:ud	ARG(2):ud
+(W)	mov(1)		r31.2:ud	ARG(3):ud
+(W)	mov(1)		r31.3:ud	ARG(4):ud
 	SET_SHARED_SPACE_ADDR(r30, ARG(0):ud, 16)
 (W)	STORE_SPACE_DW(r30, r31)
 	)", y_offset, value[0], value[1], value[2], value[3]);
@@ -779,8 +779,8 @@ void gpgpu_shader__common_target_write_u32(struct gpgpu_shader *shdr,
 void gpgpu_shader__write_aip(struct gpgpu_shader *shdr, uint32_t y_offset)
 {
 	emit_iga64_code(shdr, media_block_write_aip, R"(
-	// Payload
-(W)	mov (1|M0)               r5.0<1>:ud    cr0.2:ud
+// Payload
+(W)	mov(1)		r5.0:ud		cr0.2:ud
 	SET_THREAD_SPACE_ADDR(r4, 0, ARG(0):ud, 4)
 (W)	STORE_SPACE_DW(r4, r5)
 	)", y_offset);
@@ -796,7 +796,7 @@ void gpgpu_shader__write_aip(struct gpgpu_shader *shdr, uint32_t y_offset)
 void gpgpu_shader__increase_aip(struct gpgpu_shader *shdr, uint32_t value)
 {
 	emit_iga64_code(shdr, write_aip, R"(
-(W)	add (1|M0)		cr0.2:ud	cr0.2:ud	ARG(0):ud
+(W)	add(1)		cr0.2:ud	cr0.2:ud	ARG(0):ud
 	)", value);
 }
 
@@ -812,7 +812,7 @@ void gpgpu_shader__write_dword(struct gpgpu_shader *shdr, uint32_t value,
 			       uint32_t y_offset)
 {
 	emit_iga64_code(shdr, media_block_write, R"(
-(W)	mov (1)		r5.0<1>:ud    ARG(1):ud
+(W)	mov(1)		r5.0:ud		ARG(1):ud
 	SET_THREAD_SPACE_ADDR(r4, 0, ARG(0):ud, 4)
 (W)	STORE_SPACE_DW(r4, r5)
 	)", y_offset, value);
@@ -828,7 +828,7 @@ void gpgpu_shader__write_dword(struct gpgpu_shader *shdr, uint32_t value,
 void gpgpu_shader__clear_exception(struct gpgpu_shader *shdr, uint32_t value)
 {
 	emit_iga64_code(shdr, clear_exception, R"(
-(W)	and (1|M0) cr0.1<1>:ud cr0.1<0;1,0>:ud ARG(0):ud
+(W)	and(1)		cr0.1:ud	cr0.1:ud	ARG(0):ud
 	)", ~value);
 }
 
@@ -842,7 +842,7 @@ void gpgpu_shader__clear_exception(struct gpgpu_shader *shdr, uint32_t value)
 void gpgpu_shader__set_exception(struct gpgpu_shader *shdr, uint32_t value)
 {
 	emit_iga64_code(shdr, set_exception, R"(
-(W)	or (1|M0) cr0.1<1>:ud cr0.1<0;1,0>:ud ARG(0):ud
+(W)	or(1)		cr0.1:ud	cr0.1:ud	ARG(0):ud
 	)", value);
 }
 
@@ -863,13 +863,13 @@ void gpgpu_shader__write_on_exception(struct gpgpu_shader *shdr, uint32_t value,
 				      uint32_t y_offset, uint32_t mask, uint32_t expected)
 {
 	emit_iga64_code(shdr, write_on_exception, R"(
-(W)	mov (1|M0)		r5.0<1>:ud	ARG(2):ud
+(W)	mov(1)		r5.0:ud		ARG(2):ud
 	SET_THREAD_SPACE_ADDR(r4, ARG(0), ARG(1):ud, 4)
-	// Check if masked exception is equal to provided value and write conditionally
-(W)     and (1|M0)		r3.0<1>:ud     cr0.1<0;1,0>:ud ARG(3):ud
-(W)     mov (1|M0)		f0.0<1>:ud     0x0:ud
-(W)     cmp (1|M0) (eq)f0.0	null:ud        r3.0<0;1,0>:ud  ARG(4):ud
-(W&f0.0) STORE_SPACE_DW(r4, r5)
+// Check if masked exception is equal to provided value and write conditionally
+(W)	and(1)		r3.0:ud		cr0.1:ud	ARG(3):ud
+(W)	mov(1)		f0.0:ud		0x0:ud
+(W)	cmp(1)(eq)f0.0	null:ud		r3.0:ud		ARG(4):ud
+(W&f0.0)STORE_SPACE_DW(r4, r5)
 	)", 4 * x_offset, y_offset, value, mask, expected);
 }
 
@@ -890,13 +890,13 @@ void gpgpu_shader__end_system_routine(struct gpgpu_shader *shdr,
 	 */
 	if (breakpoint_suppress)
 		emit_iga64_code(shdr, breakpoint_suppress, R"(
-(W)	or  (1|M0)               cr0.0<1>:ud   cr0.0<0;1,0>:ud   0x8000:ud
+(W)	or(1)		cr0.0:ud	cr0.0:ud	0x8000:ud
 		)");
 
 	emit_iga64_code(shdr, end_system_routine, R"(
-(W)	and (1|M0)               cr0.1<1>:ud   cr0.1<0;1,0>:ud   ARG(0):ud
-	// return to an application
-(W)	and (1|M0)               cr0.0<1>:ud   cr0.0<0;1,0>:ud   0x7FFFFFFD:ud
+(W)	and(1)		cr0.1:ud	cr0.1:ud	ARG(0):ud
+// return to an application
+(W)	and(1)		cr0.0:ud	cr0.0:ud	0x7FFFFFFD:ud
 	)", 0x7fffff | (1 << 26)); /* clear all exceptions, except read only bit */
 }
 
@@ -915,16 +915,16 @@ void gpgpu_shader__end_system_routine_step_if_eq(struct gpgpu_shader *shdr,
 						 uint32_t value)
 {
 	emit_iga64_code(shdr, end_system_routine_step_if_eq, R"(
-(W)		or  (1|M0)               cr0.0<1>:ud   cr0.0<0;1,0>:ud   0x8000:ud
-(W)		and (1|M0)               cr0.1<1>:ud   cr0.1<0;1,0>:ud   ARG(0):ud
-		SET_SHARED_SPACE_ADDR(r30, ARG(0):ud, 4)
-(W)		LOAD_SPACE_DW(r31, r30)
-		// clear the flag register
-(W)		mov (1|M0)               f0.0<1>:ud    0x0:ud
-(W)		cmp (1|M0)    (ne)f0.0   null<1>:ud     r31.0<0;1,0>:ud   ARG(2):ud
-(W&f0.0)	and (1|M0)              cr0.1<1>:ud     cr0.1<0;1,0>:ud   ARG(3):ud
-		// return to an application
-(W)		and (1|M0)               cr0.0<1>:ud   cr0.0<0;1,0>:ud   0x7FFFFFFD:ud
+(W)	or(1)		cr0.0:ud	cr0.0:ud	0x8000:ud
+(W)	and(1)		cr0.1:ud	cr0.1:ud	ARG(0):ud
+	SET_SHARED_SPACE_ADDR(r30, ARG(0):ud, 4)
+(W)	LOAD_SPACE_DW(r31, r30)
+// clear the flag register
+(W)	mov(1)		f0.0:ud		0x0:ud
+(W)	cmp(1)(ne)f0.0	null:ud		r31.0:ud	ARG(2):ud
+(W&f0.0)and(1)		cr0.1:ud	cr0.1:ud	ARG(3):ud
+// return to an application
+(W)	and(1)		cr0.0:ud	cr0.0:ud	0x7FFFFFFD:ud
 	)", 0x807fffff, /* leave breakpoint exception */
 	y_offset, value, 0x7fffff /* clear all exceptions */ );
 }
@@ -967,17 +967,17 @@ void gpgpu_shader__write_a64_d32(struct gpgpu_shader *shdr, uint64_t ppgtt_addr,
 // [95:64] Untyped 2D Surface Width: 0x3f (width is 64 bytes)
 // [63:0] Untyped 2D Surface Base Address
 // initialize register
-(W)	mov (8)			r30.0<1>:uq	0x0:uq
+(W)	mov(8)		r30.0:uq	0x0:uq
 // [31:0] Untyped 2D Surface Base Address low
-(W)	mov (1)			r30.0<1>:ud	ARG(0):ud
+(W)	mov(1)		r30.0:ud	ARG(0):ud
 // [63:32] Untyped 2D Surface Base Address high
-(W)	mov (1)			r30.1<1>:ud ARG(1):ud
+(W)	mov(1)		r30.1:ud	ARG(1):ud
 // [95:64] Untyped 2D Surface Width: 0x3f
 //	   (Width minus 1 (in bytes) of the 2D surface, it represents 64)
-(W)	mov (1)			r30.2<1>:ud	0x3f:ud
+(W)	mov(1)		r30.2:ud	0x3f:ud
 // [159:128] Untyped 2D Surface Pitch: 0x3f
 //	     (Pitch minus 1 (in bytes) of the 2D surface, it represents 64)
-(W)	mov (1)			r30.4<1>:ud	0x3f:ud
+(W)	mov(1)		r30.4:ud	0x3f:ud
 // [231:224] Block Width: 0x3 (4 bytes)
 //	     (Specifies the width minus 1 (in number of data elements) for this
 //	     rectangular region, it represents 4)
@@ -988,13 +988,13 @@ void gpgpu_shader__write_a64_d32(struct gpgpu_shader *shdr, uint64_t ppgtt_addr,
 // [243:240] Array Length: 0
 //	     (Specifies Array Length minus 1 for Load2DBlockArray messages,
 //	     must be zero for 2D Block Store messages, it represents 1)
-(W)	mov (1)			r30.7<1>:ud	0x3:ud
+(W)	mov(1)		r30.7:ud	0x3:ud
 // src1 data payload size
 // Block Height x Block Width x Data size / GRF Register size
 //	=> 1 x 16 x 32bit / 512bit = 1
 // data payload size is 1
-(W)	mov (8)			r31.0<1>:uq	0x0:uq
-(W)	mov (1|M0)		r31.0<1>:ud	ARG(2):ud
+(W)	mov(8)		r31.0:uq	0x0:uq
+(W)	mov(1)		r31.0:ud	ARG(2):ud
 // send.ugm Untyped 2D Block Array Store
 // Format: send.ugm (1) dst src0 src1 ExtMsg MsgDesc
 // Execution Mask restriction: SIMT1
@@ -1014,7 +1014,7 @@ void gpgpu_shader__write_a64_d32(struct gpgpu_shader *shdr, uint64_t ppgtt_addr,
 // [19:16] Cache : 2 (L1UC_L3UC)
 // [11:9] Data Size: 2 (D32)
 // [5:0] Store Operation: 7
-(W)	send.ugm (1)		null	r30	r31:1	0x0	0x2020407
+(W)	send.ugm(1)	null		r30	r31:1	0x0	0x2020407
 #endif
 	)", lower_32_bits(addr), upper_32_bits(addr), value);
 }
@@ -1055,17 +1055,17 @@ void gpgpu_shader__read_a64_d32(struct gpgpu_shader *shdr, uint64_t ppgtt_addr)
 // [95:64] Untyped 2D Surface Width: 0x3f (width is 64 bytes)
 // [63:0] Untyped 2D Surface Base Address
 // initialize register
-(W)	mov (8)			r30.0<1>:uq	0x0:uq
+(W)	mov(8)		r30.0:uq	0x0:uq
 // [31:0] Untyped 2D Surface Base Address low
-(W)	mov (1)			r30.0<1>:ud	ARG(0):ud
+(W)	mov(1)		r30.0:ud	ARG(0):ud
 // [63:32] Untyped 2D Surface Base Address high
-(W)	mov (1)			r30.1<1>:ud ARG(1):ud
+(W)	mov(1)		r30.1:ud	ARG(1):ud
 // [95:64] Untyped 2D Surface Width: 0x3f
 //	   (Width minus 1 (in bytes) of the 2D surface, it represents 64)
-(W)	mov (1)			r30.2<1>:ud	0x3f:ud
+(W)	mov(1)		r30.2:ud	0x3f:ud
 // [159:128] Untyped 2D Surface Pitch: 0x3f
 //	     (Pitch minus 1 (in bytes) of the 2D surface, it represents 64)
-(W)	mov (1)			r30.4<1>:ud	0x3f:ud
+(W)	mov(1)		r30.4:ud	0x3f:ud
 // [231:224] Block Width: 0x3 (4 bytes)
 //	     (Specifies the width minus 1 (in number of data elements) for this
 //	     rectangular region, it represents 4)
@@ -1076,7 +1076,7 @@ void gpgpu_shader__read_a64_d32(struct gpgpu_shader *shdr, uint64_t ppgtt_addr)
 // [243:240] Array Length: 0
 //	     (Specifies Array Length minus 1 for Load2DBlockArray messages,
 //	     must be zero for 2D Block Store messages, it represents 1)
-(W)	mov (1)			r30.7<1>:ud	0x3:ud
+(W)	mov(1)		r30.7:ud	0x3:ud
 //
 // dest data payload format is selected by Data Size.
 // Block Height x Block Width x Data size / GRF Register size
@@ -1104,7 +1104,7 @@ void gpgpu_shader__read_a64_d32(struct gpgpu_shader *shdr, uint64_t ppgtt_addr)
 // [11:9] Data Size: 2 (D32) 10
 // [7] VNNI Transform: 0
 // [5:0] Load Operation: 3 (Load 2D Block) 11
-(W)	send.ugm (1)		r31	r30	null	0x0	0x2128403
+(W)	send.ugm(1)	r31		r30	null	0x0	0x2128403
 #endif
 	)", lower_32_bits(addr), upper_32_bits(addr));
 }

@@ -294,22 +294,22 @@ static struct gpgpu_shader *__xehp_gpgpu_kernel(int fd, struct intel_buf *buf)
 
 	emit_iga64_code(kernel, gpgpu_fill, R"(
 // fill up r1 with target colour
-mov (4|M0)		r1.0<1>:ub	r1.0<0;1,0>:ub
+	mov(4)		r1.0:ub		r1.0:ub
 // prepare block x offset (Thread Group Id X * 16)
-shl (1|M0)		r2.0<1>:ud	r0.1<0;1,0>:ud	0x4:ud
+	shl(1)		r2.0:ud		r0.1:ud		0x4:ud
 // prepare block y offset (Thread Group Id Y)
-mov (1|M0)		r2.1<1>:ud	r0.6<0;1,0>:ud
+	mov(1)		r2.1:ud		r0.6:ud
 // zero message header payload
-mov (8|M0)		r4.0<1>:ud	0x0:ud
+	mov(8)		r4.0:ud		0x0:ud
 // fill up message payload with target colour
-mov (16|M0)		r5.0<1>:ud	r1.0<0;1,0>:ud
+	mov(16)		r5.0:ud		r1.0:ud
 #if GFX_VER < 2000
 // load block offsets into message header payload
-mov (2|M0)		r4.0<1>:ud	r2.0<2;2,1>:ud
+	mov(2)		r4.0:ud		r2.0<2;2,1>:ud
 // load block width
-mov (1|M0)		r4.2<1>:ud	0xF:ud
+	mov(1)		r4.2:ud		0xF:ud
 // load FFTID from R0 header
-mov (1|M0)		r4.4<1>:ud	r0.5<0;1,0>:ud
+	mov(1)		r4.4:ud		r0.5:ud
 // Media block write to bti[0] surface
 // Message Descriptor
 //	0x40A8000:
@@ -318,12 +318,12 @@ mov (1|M0)		r4.4<1>:ud	r0.5<0;1,0>:ud
 //	[19]		Header: 1 (included)
 //	[18:14]		MessageType: 0xA (media block write)
 //	[7:0]		BTI: 0
-send.dc1 (16|M0)	null	r4	src1_null	0x0	0x40A8000
+	send.dc1(16)	null		r4		src1_null	0x0	0x40A8000
 #elif GFX_VER < 3000
 // load block offsets into message header payload
-mov (2|M0)		r4.5<1>:ud	r2.0<2;2,1>:ud
+	mov(2)		r4.5:ud		r2.0<2;2,1>:ud
 // load block width
-mov (1|M0)		 r4.14<1>:w	0xF:w
+	mov(1)		r4.14:w		0xF:w
 // Typed 2D block store to bti[0] surface
 // Message Descriptor
 //	0x6400007:
@@ -332,21 +332,21 @@ mov (1|M0)		 r4.14<1>:w	0xF:w
 //	[24:20]		Rlen: 0
 //	[19:17]		Caching: 0  (use state settings for both L1 and L3)
 //	[5:0]		Opcode: 0x07  (store_block2d)
-send.tgm (16|M0)	null	r4	null	0x0	0x64000007
+	send.tgm(16)	null		r4		null		0x0	0x64000007
 #else
 // load A64 base surface state offset into address payload
-mov (1|M0)		r4.0<1>:ud	ARG(0):ud
-mov (1|M0)		r4.1<1>:ud	ARG(1):ud
+	mov(1)		r4.0:ud		ARG(0):ud
+	mov(1)		r4.1:ud		ARG(1):ud
 // load surface width
-mov (1|M0)		r4.2<1>:ud	ARG(2):ud
+	mov(1)		r4.2:ud		ARG(2):ud
 // load surface height
-mov (1|M0)		r4.3<1>:ud	ARG(3):ud
+	mov(1)		r4.3:ud		ARG(3):ud
 // load surface pitch
-mov (1|M0)		r4.4<1>:ud	ARG(4):ud
+	mov(1)		r4.4:ud		ARG(4):ud
 // load block offsets
-mov (2|M0)		r4.5<1>:ud	r2.0<2;2,1>:ud
+	mov(2)		r4.5:ud		r2.0<2;2,1>:ud
 // load block width
-mov (1|M0)		r4.14<1>:w	0xF:w
+	mov(1)		r4.14:w		0xF:w
 // Untyped 2D block store
 // Message Descriptor
 //	bspec:63981
@@ -358,7 +358,7 @@ mov (1|M0)		r4.14<1>:w	0xF:w
 //	[15]		DataOrder: 0  non-transposed
 //	[11:9]		DataSize: 0  (8b per data element)
 //	[5:0]		Opcode: 0x07  (store_block2d)
-send.ugm (1|M0)		null	r4	r5:1	0x0	0x2020007
+	send.ugm(1)	null		r4		r5:1		0x0	0x2020007
 #endif
 	)", offset & 0xffffffff, offset >> 32,
 	intel_buf_width(buf) * buf->bpp/8 - 1, intel_buf_height(buf) - 1,
@@ -392,49 +392,49 @@ static struct gpgpu_shader *__xe3p_gpgpu_kernel(int xe)
 #define TMP		r3.7
 #define ADDR_LO		r4.0
 #if GFX_VER >= 3500
-(W)	add (1)		XEND<1>:ud	XPOS:ud		WIDTH:ud
-(W)	mov (1)		OFFSET<1>:ud	0x0:ud
+(W)	add(1)		XEND:ud		XPOS:ud		WIDTH:ud
+(W)	mov(1)		OFFSET:ud	0x0:ud
 
-(W)	shl (1)		XOFFSET<1>:ud	RX:ud		0x4:ud
-(W)	add (1)		XOFFSET<1>:ud	XOFFSET:ud	XPOS:ud
-(W)	mov (1)		XCURRENT<1>:ud	XOFFSET:ud
+(W)	shl(1)		XOFFSET:ud	RX:ud		0x4:ud
+(W)	add(1)		XOFFSET:ud	XOFFSET:ud	XPOS:ud
+(W)	mov(1)		XCURRENT:ud	XOFFSET:ud
 
-(W)	add (1)		TMP<1>:ud	RY:ud		YPOS:ud
-(W)	mul (1)		YOFFSET<1>:ud	TMP:ud		SURFWIDTH:ud
-(W)	add (1)		OFFSET<1>:ud	XOFFSET:ud	YOFFSET:ud
+(W)	add(1)		TMP:ud		RY:ud		YPOS:ud
+(W)	mul(1)		YOFFSET:ud	TMP:ud		SURFWIDTH:ud
+(W)	add(1)		OFFSET:ud	XOFFSET:ud	YOFFSET:ud
 
 // Set base address with scalar register
-(W)	add (1)		ADDR_LO<1>:ud	OFFSET:ud	ADDR_BO_LOW:ud
-(W)	mov (1)		s0.0<1>:ud	ADDR_LO:ud
-(W)	mov (1)		s0.1<1>:ud	ADDR_BO_HIGH:ud
+(W)	add(1)		ADDR_LO:ud	OFFSET:ud	ADDR_BO_LOW:ud
+(W)	mov(1)		s0.0:ud		ADDR_LO:ud
+(W)	mov(1)		s0.1:ud		ADDR_BO_HIGH:ud
 
 // color
-(W)	mov (4)		r20.0<1>:ub		COLOR:ub
+(W)	mov(4)		r20.0:ub	COLOR:ub
 
 // A64 offset
-(W)	mov (8)		r30.0<1>:uq		0x0:uq
+(W)	mov(8)		r30.0:uq	0x0:uq
 
 //dword: 0
-(W)	cmp (1)		(lt)f0.0 null:ud        XCURRENT:ud	XEND:ud
-(W&f0.0)sendg.ugm (1)	null	r30:1	r20:1	s0.0	0x29404
+(W)	cmp(1)(lt)f0.0	null:ud		XCURRENT:ud	XEND:ud
+(W&f0.0)sendg.ugm(1)	null		r30:1		r20:1	s0.0	0x29404
 //dword: 1
-(W)	add (1)		XCURRENT<1>:ud		XCURRENT:ud	4:ud
-(W)	add (1)		ADDR_LO<1>:ud		ADDR_LO:ud	0x4:ud
-(W)	mov (1)		s0.0<1>:ud		ADDR_LO:ud
-(W)	cmp (1)		(lt)f0.0 null:ud        XCURRENT:ud	XEND:ud
-(W&f0.0)sendg.ugm (1)	null	r30:1	r20:1	s0.0	0x29404
+(W)	add(1)		XCURRENT:ud	XCURRENT:ud	4:ud
+(W)	add(1)		ADDR_LO:ud	ADDR_LO:ud	0x4:ud
+(W)	mov(1)		s0.0:ud		ADDR_LO:ud
+(W)	cmp(1)(lt)f0.0	null:ud		XCURRENT:ud	XEND:ud
+(W&f0.0)sendg.ugm(1)	null		r30:1		r20:1	s0.0	0x29404
 //dword: 2
-(W)	add (1)		XCURRENT<1>:ud		XCURRENT:ud	4:ud
-(W)	add (1)		ADDR_LO<1>:ud		ADDR_LO:ud	0x4:ud
-(W)	mov (1)		s0.0<1>:ud		ADDR_LO:ud
-(W)	cmp (1)		(lt)f0.0 null:ud        XCURRENT:ud	XEND:ud
-(W&f0.0)sendg.ugm (1)	null	r30:1	r20:1	s0.0	0x29404
+(W)	add(1)		XCURRENT:ud	XCURRENT:ud	4:ud
+(W)	add(1)		ADDR_LO:ud	ADDR_LO:ud	0x4:ud
+(W)	mov(1)		s0.0:ud		ADDR_LO:ud
+(W)	cmp(1)(lt)f0.0	null:ud		XCURRENT:ud	XEND:ud
+(W&f0.0)sendg.ugm(1)	null		r30:1		r20:1	s0.0	0x29404
 //dword: 3
-(W)	add (1)		XCURRENT<1>:ud		XCURRENT:ud	4:ud
-(W)	add (1)		ADDR_LO<1>:ud		ADDR_LO:ud	0x4:ud
-(W)	mov (1)		s0.0<1>:ud		ADDR_LO:ud
-(W)	cmp (1)		(lt)f0.0 null:ud        XCURRENT:ud	XEND:ud
-(W&f0.0)sendg.ugm (1)	null	r30:1	r20:1	s0.0	0x29404
+(W)	add(1)		XCURRENT:ud	XCURRENT:ud	4:ud
+(W)	add(1)		ADDR_LO:ud	ADDR_LO:ud	0x4:ud
+(W)	mov(1)		s0.0:ud		ADDR_LO:ud
+(W)	cmp(1)(lt)f0.0	null:ud		XCURRENT:ud	XEND:ud
+(W&f0.0)sendg.ugm(1)	null		r30:1		r20:1	s0.0	0x29404
 #endif
 )");
 

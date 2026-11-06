@@ -379,7 +379,7 @@ test_compute_mode(int fd, uint32_t vm, uint64_t addr, uint64_t userptr,
 		.syncs = to_user_pointer(sync),
 	};
 	int64_t fence_timeout;
-	uint32_t exec_queues[MAX_N_EXEC_QUEUES];
+	uint32_t *exec_queues;
 	size_t bo_size, sync_size;
 	uint32_t bo = 0;
 	struct {
@@ -393,7 +393,8 @@ test_compute_mode(int fd, uint32_t vm, uint64_t addr, uint64_t userptr,
 	int map_fd = -1;
 	bool owns_vm = false, owns_fd = false;
 
-	igt_assert_lte(n_exec_queues, MAX_N_EXEC_QUEUES);
+	exec_queues = calloc(n_exec_queues, sizeof(*exec_queues));
+	igt_assert(exec_queues);
 
 	if (flags & FD) {
 		fd = drm_reopen_driver(fd);
@@ -609,6 +610,8 @@ test_compute_mode(int fd, uint32_t vm, uint64_t addr, uint64_t userptr,
 	if (owns_fd) {
 		drm_close_driver(fd);
 	}
+
+	free(exec_queues);
 }
 
 static void
@@ -620,15 +623,13 @@ test_legacy_mode(int fd, uint32_t vm, uint64_t addr, uint64_t userptr,
 		{ .type = DRM_XE_SYNC_TYPE_SYNCOBJ, .flags = DRM_XE_SYNC_FLAG_SIGNAL, },
 		{ .type = DRM_XE_SYNC_TYPE_SYNCOBJ, .flags = DRM_XE_SYNC_FLAG_SIGNAL, },
 	};
-	struct drm_xe_sync sync_all[MAX_N_EXEC_QUEUES];
+	struct drm_xe_sync *sync_all;
 	struct drm_xe_exec exec = {
 		.num_batch_buffer = 1,
 		.num_syncs = 2,
 		.syncs = to_user_pointer(sync),
 	};
-	uint32_t exec_queues[MAX_N_EXEC_QUEUES] = {};
-	uint32_t bind_exec_queues[MAX_N_EXEC_QUEUES];
-	uint32_t syncobjs[MAX_N_EXEC_QUEUES];
+	uint32_t *exec_queues, *bind_exec_queues, *syncobjs;
 	size_t bo_size;
 	uint32_t bo = 0;
 	struct {
@@ -641,7 +642,11 @@ test_legacy_mode(int fd, uint32_t vm, uint64_t addr, uint64_t userptr,
 	int i, j, b, hang_exec_queue = n_exec_queues / 2;
 	bool owns_vm = false, owns_fd = false;
 
-	igt_assert_lte(n_exec_queues, MAX_N_EXEC_QUEUES);
+	sync_all = calloc(n_exec_queues, sizeof(*sync_all));
+	exec_queues = calloc(n_exec_queues, sizeof(*exec_queues));
+	bind_exec_queues = calloc(n_exec_queues, sizeof(*bind_exec_queues));
+	syncobjs = calloc(n_exec_queues, sizeof(*syncobjs));
+	igt_assert(sync_all && exec_queues && bind_exec_queues && syncobjs);
 
 	if (flags & FD) {
 		fd = drm_reopen_driver(fd);
@@ -676,7 +681,6 @@ test_legacy_mode(int fd, uint32_t vm, uint64_t addr, uint64_t userptr,
 	}
 	memset(data, 0, bo_size);
 
-	memset(sync_all, 0, sizeof(sync_all));
 	for (i = 0; i < n_exec_queues; i++) {
 		if (flags & MULTI_QUEUE) {
 			struct drm_xe_ext_set_property multi_queue = {
@@ -942,6 +946,11 @@ wq_stress_cleanup:
 		xe_vm_destroy(fd, vm);
 	if (owns_fd)
 		drm_close_driver(fd);
+
+	free(sync_all);
+	free(exec_queues);
+	free(bind_exec_queues);
+	free(syncobjs);
 }
 
 struct thread_data {

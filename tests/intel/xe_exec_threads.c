@@ -50,6 +50,30 @@
 #define MANY_QUEUES	(0x1 << 14)
 #define MULTI_QUEUE		(0x1 << 15)
 #define WQ_STRESS		(0x1 << 16)
+#define MULTI_QUEUE_PRIORITY	(0x1 << 17)
+
+/* Mirrors XE_MAX_GROUP_SIZE: one primary plus its secondaries. */
+#define MULTI_QUEUE_GROUP_SIZE	64
+
+/* Enough queues to span several full multi-queue groups. */
+#define N_EXEC_QUEUE_MULTI_GROUP	(8 * MULTI_QUEUE_GROUP_SIZE)
+
+/*
+ * Multi-queue priority updates issued per exec. The values must alternate:
+ * the KMD ignores a priority set to its current value, so a constant value
+ * would generate no CGP_SYNC traffic at all.
+ */
+#define MULTI_QUEUE_PRIORITY_BURST	8
+
+/*
+ * Workers per engine for the registration subtests. Registering several
+ * groups at once widens the window where one queue's CGP_SYNC is still
+ * outstanding while another queue waits on it.
+ */
+#define MULTI_QUEUE_THREADS_PER_ENGINE	8
+
+/* Wall clock budget for the CGP_SYNC replay subtests. */
+#define CGP_REPEAT_SEC		5
 
 /*
  * Maximum fence wait time when WQ_STRESS is active. If any bind/unbind
@@ -362,6 +386,27 @@ test_balancer(int fd, int gt, uint32_t vm, uint64_t addr, uint64_t userptr,
 		drm_close_driver(fd);
 }
 
+/*
+ * Group membership for the queue at @i. A group holds at most
+ * MULTI_QUEUE_GROUP_SIZE queues, so a larger queue count simply spans
+ * several groups.
+ */
+static uint64_t multi_queue_group_value(uint32_t *exec_queues, int i)
+{
+	return i % MULTI_QUEUE_GROUP_SIZE ?
+	       exec_queues[i & ~(MULTI_QUEUE_GROUP_SIZE - 1)] :
+	       DRM_XE_MULTI_GROUP_CREATE;
+}
+
+static void multi_queue_priority_burst(int fd, uint32_t exec_queue)
+{
+	uint32_t prop = DRM_XE_EXEC_QUEUE_SET_PROPERTY_MULTI_QUEUE_PRIORITY;
+	int z;
+
+	for (z = 0; z < MULTI_QUEUE_PRIORITY_BURST; z++)
+		xe_exec_queue_set_property(fd, exec_queue, prop, z & 1);
+}
+
 static void
 test_compute_mode(int fd, uint32_t vm, uint64_t addr, uint64_t userptr,
 		  struct drm_xe_engine_class_instance *eci,
@@ -446,7 +491,7 @@ test_compute_mode(int fd, uint32_t vm, uint64_t addr, uint64_t userptr,
 			};
 			uint64_t ext = to_user_pointer(&multi_queue);
 
-			multi_queue.value = i ? exec_queues[0] : DRM_XE_MULTI_GROUP_CREATE;
+			multi_queue.value = multi_queue_group_value(exec_queues, i);
 			exec_queues[i] = xe_exec_queue_create(fd, vm, eci, ext);
 		} else {
 			exec_queues[i] = xe_exec_queue_create(fd, vm, eci, 0);
@@ -490,6 +535,9 @@ test_compute_mode(int fd, uint32_t vm, uint64_t addr, uint64_t userptr,
 		exec.exec_queue_id = exec_queues[e];
 		exec.address = batch_addr;
 		xe_exec(fd, &exec);
+
+		if (flags & MULTI_QUEUE_PRIORITY)
+			multi_queue_priority_burst(fd, exec_queues[e]);
 
 		if (flags & REBIND && i && !(i & 0x1f)) {
 			for (j = i == 0x20 ? 0 : i - 0x1f; j <= i; ++j)
@@ -691,7 +739,7 @@ test_legacy_mode(int fd, uint32_t vm, uint64_t addr, uint64_t userptr,
 
 			uint64_t ext = to_user_pointer(&multi_queue);
 
-			multi_queue.value = i ? exec_queues[0] : DRM_XE_MULTI_GROUP_CREATE;
+			multi_queue.value = multi_queue_group_value(exec_queues, i);
 			exec_queues[i] = xe_exec_queue_create(fd, vm, eci, ext);
 		} else {
 			if (!(flags & MANY_QUEUES))
@@ -788,6 +836,9 @@ test_legacy_mode(int fd, uint32_t vm, uint64_t addr, uint64_t userptr,
 		} else {
 			xe_exec(fd, &exec);
 		}
+
+		if (flags & MULTI_QUEUE_PRIORITY)
+			multi_queue_priority_burst(fd, exec_queues[e]);
 
 		if (flags & REBIND && i && !(i & 0x1f)) {
 			xe_vm_unbind_async(fd, vm, bind_exec_queues[e],
@@ -1237,6 +1288,12 @@ static void *thread(void *data)
  * arg[1]:
  * @multi-queue-basic:
  *	multi-queue basic
+ * @multi-queue-many-groups:
+ *	multi-queue many groups
+ * @multi-queue-mixed-many-groups:
+ *	multi-queue mixed many groups
+ * @multi-queue-mixed-many-groups-priority:
+ *	multi-queue mixed many groups priority
  * @multi-queue-userptr:
  *	multi-queue userptr
  * @multi-queue-rebind:
@@ -1520,6 +1577,9 @@ int igt_main()
 	const struct section {
 		const char *name;
 		unsigned int flags;
+		unsigned int repeat_secs;
+		int n_threads_per_engine;
+		int n_exec_queues;
 	} sections[] = {
 		{ "basic", 0 },
 		{ "many-queues", MANY_QUEUES },
@@ -1766,6 +1826,14 @@ int igt_main()
 			USERPTR | INVALIDATE },
 		{ "multi-queue-cm-fd-userptr-invalidate-race", MULTI_QUEUE | COMPUTE_MODE | FD |
 			USERPTR | INVALIDATE | RACE },
+		{ "multi-queue-many-groups", MULTI_QUEUE, CGP_REPEAT_SEC,
+			MULTI_QUEUE_THREADS_PER_ENGINE, N_EXEC_QUEUE_MULTI_GROUP },
+		{ "multi-queue-mixed-many-groups", MULTI_QUEUE | MIXED_MODE,
+			CGP_REPEAT_SEC, MULTI_QUEUE_THREADS_PER_ENGINE,
+			N_EXEC_QUEUE_MULTI_GROUP },
+		{ "multi-queue-mixed-many-groups-priority", MULTI_QUEUE |
+			MIXED_MODE | MULTI_QUEUE_PRIORITY, CGP_REPEAT_SEC, 1,
+			N_EXEC_QUEUE_MULTI_GROUP },
 		{ NULL },
 	};
 	int fd;
@@ -1775,6 +1843,11 @@ int igt_main()
 
 	for (const struct section *s = sections; s->name; s++) {
 		igt_subtest_f("threads-%s", s->name) {
+			int n_threads = s->n_threads_per_engine ?
+				s->n_threads_per_engine : 1;
+			int n_queues = s->n_exec_queues ?
+				s->n_exec_queues : N_EXEC_QUEUE;
+
 			if (s->flags & MULTI_QUEUE) {
 				igt_skip_on_f(!(xe_has_multi_queue_engine(fd)),
 						"multi_queue is supported on graphics version 35 and above");
@@ -1785,7 +1858,11 @@ int igt_main()
 			if ((s->flags & MULTI_QUEUE) && (s->flags & HANG))
 				ignore_multi_queue_hang_warnings_in_dmesg();
 
-			threads(fd, s->flags, 1, N_EXEC_QUEUE);
+			if (s->repeat_secs)
+				igt_until_timeout(s->repeat_secs)
+					threads(fd, s->flags, n_threads, n_queues);
+			else
+				threads(fd, s->flags, n_threads, n_queues);
 		}
 	}
 

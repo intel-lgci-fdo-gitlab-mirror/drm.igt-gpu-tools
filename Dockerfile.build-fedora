@@ -8,6 +8,7 @@ RUN dnf install -y \
 	'pkgconfig(libkmod)' \
 	'pkgconfig(libunwind)' \
 	'pkgconfig(libdw)' \
+	'pkgconfig(libzstd)' \
 	'pkgconfig(pixman-1)' \
 	'pkgconfig(valgrind)' \
 	'pkgconfig(cairo)' \

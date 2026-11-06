@@ -20,6 +20,7 @@ RUN apt-get install -y \
 			libunwind-dev:armhf \
 			libdw-dev:armhf \
 			zlib1g-dev:armhf \
+			libzstd-dev:armhf \
 			liblzma-dev:armhf \
 			libcairo-dev:armhf \
 			libpci-dev:armhf \

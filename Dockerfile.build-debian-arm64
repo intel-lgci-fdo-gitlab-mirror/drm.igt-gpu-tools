@@ -20,6 +20,7 @@ RUN apt-get install -y \
 			libunwind-dev:arm64 \
 			libdw-dev:arm64 \
 			zlib1g-dev:arm64 \
+			libzstd-dev:arm64 \
 			liblzma-dev:arm64 \
 			libcairo-dev:arm64 \
 			libpci-dev:arm64 \

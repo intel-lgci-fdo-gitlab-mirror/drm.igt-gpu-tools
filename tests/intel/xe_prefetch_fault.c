@@ -54,11 +54,11 @@ static void gpgpu_shader__prefetch_fault(struct gpgpu_shader *shdr,
 #if GFX_VER >= 3500
 L0:
 // Set base address with scalar register
-(W)	mov (1)		s0.0<1>:ud		ARG(0):ud
-(W)	mov (1)		s0.1<1>:ud		ARG(1):ud
+(W)	mov(1)		s0.0:ud		ARG(0):ud
+(W)	mov(1)		s0.1:ud		ARG(1):ud
 
 // A64 offset
-(W)	mov (8)		r30.0<1>:uq		0x0:uq
+(W)	mov(8)		r30.0:uq	0x0:uq
 
 // efficient 64bit Read with cached L1, cached L2 and cached L3
 // sendg ugm load with SBID 3
@@ -75,7 +75,7 @@ L0:
 //      [9:7] Vector Size: 0 (Vector length 1)
 //      [5:0] Opcode: 0 (Load)
 // Prefetch operations are implemented using a NULL destination register.
-(W)	sendg.ugm (1|M0)	null	r30:1	null:0	s0.0	0x99C00	{A@1,$5}
+(W)	sendg.ugm(1)	null		r30:1	null:0	s0.0	0x99C00		{A@1,$5}
 
 #endif
 	)", lower_32_bits(addr), upper_32_bits(addr));
@@ -149,16 +149,16 @@ static struct gpgpu_shader *get_l2_prefetch_shader(int fd)
 #if GFX_VER >= 3500
 L0:
 // Set base address with scalar register
-(W)   mov (1)                s0.0<1>:ud                         ARG(0):ud
-(W)   mov (1)                s0.1<1>:ud                         ARG(1):ud
+(W)	mov(1)		s0.0:ud		ARG(0):ud
+(W)	mov(1)		s0.1:ud		ARG(1):ud
 
 // A64 offset
-(W)   mov (8)                r30.0<1>:uq                       0x0:uq
+(W)	mov(8)		r30.0:uq	0x0:uq
 
 // Prefetch operations are implemented using a NULL destination register.
 // L1 uncached forces the prefetch to bypass LSC, making L2 the fault source.
 // load.ugm.d64t.a64.uc.ca.uc [src0]
-(W)   sendg.ugm (1)          null         r30:1      null:0     s0.0        0x49C00
+(W)	sendg.ugm(1)	null		r30:1	null:0	s0.0	0x49C00
 #endif
 	)", lower_32_bits(addr), upper_32_bits(addr));
 

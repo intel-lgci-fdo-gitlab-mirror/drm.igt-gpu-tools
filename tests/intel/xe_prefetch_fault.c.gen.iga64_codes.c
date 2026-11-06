@@ -3,7 +3,7 @@
 
 #include "gpgpu_shader.h"
 
-#define MD5_SUM_IGA64_ASMS 712da12709dd4ebfeffc82119c37c556
+#define MD5_SUM_IGA64_ASMS 546bddbd13ed40a4cc520c886248c178
 
 struct iga64_template const iga64_code_xe_l2_prefetch_fault_prefetch[] = {
 	{ .gfx_ver = 3500, .size = 28, .code = (const uint32_t []) {

@@ -298,7 +298,7 @@ static int addr_range_cmp(const void *addr, const void *range)
 
 static bool skip_if_on_whitelist(int pf_fd, uint32_t reg_addr)
 {
-	struct vf_regs_allowlist *item;
+	const struct vf_regs_allowlist *item;
 
 	if (reg_addr < allowlist[0].start && reg_addr > allowlist[ARRAY_SIZE(allowlist) - 1].end)
 		return false;

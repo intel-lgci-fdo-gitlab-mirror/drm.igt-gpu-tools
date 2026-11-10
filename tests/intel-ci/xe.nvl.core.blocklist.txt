@@ -107,3 +107,5 @@ igt@xe_exec_sip@.*
 igt@xe_exec_sip_eudebug@.*
 igt@xe_live_ktest@xe_eudebug
 ##################################################################
+igt@xe_wedged@cold-reset-wedged
+##################################################################

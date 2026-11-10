@@ -54,11 +54,58 @@ const char *igt_sriov_func_str(unsigned int vf_num)
 {
 	static __thread char buf[16];
 
-	if (vf_num == 0)
-		return "pf";
+	return igt_sriov_function_name_lower(vf_num, buf, sizeof(buf));
+}
 
-	snprintf(buf, sizeof(buf), "vf%u", vf_num);
+static const char *sriov_function_name(unsigned int vf_num, bool uppercase,
+				       char *buf, size_t size)
+{
+	int ret;
+
+	igt_assert(buf && size);
+
+	if (vf_num)
+		ret = snprintf(buf, size, uppercase ? "VF%u" : "vf%u", vf_num);
+	else
+		ret = snprintf(buf, size, uppercase ? "PF" : "pf");
+
+	igt_assert(ret >= 0 && (size_t)ret < size);
+
 	return buf;
+}
+
+/**
+ * igt_sriov_function_name_lower - Get SR-IOV function name in lowercase
+ * @vf_num: VF number (1-based to identify single VF) or 0 for PF
+ * @buf: buffer
+ * @size: size of the buffer
+ *
+ * It formats the function name as "pf" when @vf_num is 0, or as "vf%u"
+ * when @vf_num is greater than 0.
+ *
+ * Return: formatted function name.
+ */
+const char *igt_sriov_function_name_lower(unsigned int vf_num, char *buf,
+					 size_t size)
+{
+	return sriov_function_name(vf_num, false, buf, size);
+}
+
+/**
+ * igt_sriov_function_name_upper - Get SR-IOV function name in uppercase
+ * @vf_num: VF number (1-based to identify single VF) or 0 for PF
+ * @buf: buffer
+ * @size: size of the buffer
+ *
+ * It formats the function name as "PF" when @vf_num is 0, or as "VF%u"
+ * when @vf_num is greater than 0.
+ *
+ * Return: formatted function name.
+ */
+const char *igt_sriov_function_name_upper(unsigned int vf_num, char *buf,
+					 size_t size)
+{
+	return sriov_function_name(vf_num, true, buf, size);
 }
 
 static bool __pf_attr_get_u32(int pf, const char *attr, uint32_t *value)

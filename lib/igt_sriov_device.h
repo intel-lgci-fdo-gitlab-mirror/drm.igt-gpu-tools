@@ -36,6 +36,8 @@ bool igt_sriov_device_reset_exists(int pf, unsigned int vf_num);
 bool igt_sriov_device_reset(int pf, unsigned int vf_num);
 bool intel_is_vf_device(int device);
 const char *igt_sriov_func_str(unsigned int vf_num);
+const char *igt_sriov_function_name_lower(unsigned int vf_num, char *buf, size_t size);
+const char *igt_sriov_function_name_upper(unsigned int vf_num, char *buf, size_t size);
 typedef void (*igt_sriov_exit_cleanup_fn)(int pf, int sig, void *user_data);
 void igt_sriov_install_exit_handler(int pf,
 				    igt_sriov_exit_cleanup_fn cleanup_fn,

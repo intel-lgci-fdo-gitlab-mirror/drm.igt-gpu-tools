@@ -118,6 +118,7 @@ igt@sriov_basic@bind-unbind-vf$
 ##################################################################
 igt@sriov_pci_config.*
 igt@xe_sriov_ggtt.*
+igt@xe_sriov_mmio_regs.*
 ##################################################################
 # Chamelium V1 HDMI receiver supports a maximum resolution
 # of 4K @ 30Hz. This test enforces an EDID with 4K @ 60Hz,

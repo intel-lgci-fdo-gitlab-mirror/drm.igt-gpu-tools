@@ -224,6 +224,15 @@ int amdgpu_dispatch_write2hw(struct amdgpu_cmd_base *base, uint64_t shader_addr,
 		base->emit(base, PACKET3_COMPUTE(PKT3_SET_SH_REG, 1));
 		base->emit(base, 0x228);
 		base->emit(base, 0x3f0);
+	} else if (version == 12) {
+		/*
+		 * mmCOMPUTE_PGM_RSRC3: whatever is left in INST_PREF_SIZE makes
+		 * the instruction prefetch run past the shader, limit it to the
+		 * 4 KiB shader BO (in 128 byte units)
+		 */
+		base->emit(base, PACKET3_COMPUTE(PKT3_SET_SH_REG, 1));
+		base->emit(base, 0x228);
+		base->emit(base, (4096 / 128) << 4);
 	}
 	return base->cdw - offset_prev;
 }

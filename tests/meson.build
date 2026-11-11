@@ -360,6 +360,10 @@ intel_xe_progs = [
         'xe_tlb',
 ]
 
+if have_libnl
+        intel_xe_progs += 'xe_err_injection'
+endif
+
 chamelium_progs = [
 	'kms_chamelium_audio',
 	'kms_chamelium_color',

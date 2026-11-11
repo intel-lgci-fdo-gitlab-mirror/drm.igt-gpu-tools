@@ -115,21 +115,34 @@ amdgpu_memset_dispatch_test(amdgpu_device_handle device_handle,
 	memset(ptr_cmd, 0, bo_cmd_size);
 	base_cmd->attach_buf(base_cmd, ptr_cmd, bo_cmd_size);
 
-	r = amdgpu_bo_alloc_and_map(device_handle, bo_shader_size, 4096,
-					AMDGPU_GEM_DOMAIN_VRAM, 0,
+	r = amdgpu_bo_alloc_and_map_sync(device_handle, bo_shader_size, 4096,
+					AMDGPU_GEM_DOMAIN_VRAM, 0, 0,
 					&bo_shader, &ptr_shader,
-					&mc_address_shader, &va_shader);
+					&mc_address_shader, &va_shader,
+					user_queue ? ring_context->timeline_syncobj_handle : 0,
+					user_queue ? ++ring_context->point : 0,
+					user_queue);
 	igt_assert_eq(r, 0);
 	memset(ptr_shader, 0, bo_shader_size);
 
 	r = amdgpu_dispatch_load_cs_shader(ptr_shader, CS_BUFFERCLEAR, version);
 	igt_assert_eq(r, 0);
 
-	r = amdgpu_bo_alloc_and_map(device_handle, bo_dst_size, 4096,
-					AMDGPU_GEM_DOMAIN_VRAM, 0,
+	r = amdgpu_bo_alloc_and_map_sync(device_handle, bo_dst_size, 4096,
+					AMDGPU_GEM_DOMAIN_VRAM, 0, 0,
 					&bo_dst, (void **)&ptr_dst,
-					&mc_address_dst, &va_dst);
+					&mc_address_dst, &va_dst,
+					user_queue ? ring_context->timeline_syncobj_handle : 0,
+					user_queue ? ++ring_context->point : 0,
+					user_queue);
 	igt_assert_eq(r, 0);
+	/* A user queue doesn't wait for the page table updates by itself */
+	if (user_queue) {
+		r = amdgpu_timeline_syncobj_wait(device_handle,
+						 ring_context->timeline_syncobj_handle,
+						 ring_context->point);
+		igt_assert_eq(r, 0);
+	}
 	/// TODO helper function for this bloc
 	amdgpu_dispatch_init(ip_type, base_cmd, version);
 
@@ -178,6 +191,10 @@ amdgpu_memset_dispatch_test(amdgpu_device_handle device_handle,
 	base_cmd->emit(base_cmd, 1);
 	base_cmd->emit(base_cmd, 1);
 
+	/* Nothing waits for the dispatch on a user queue but the IB itself */
+	if (user_queue)
+		amdgpu_dispatch_write_sync(base_cmd, version);
+
 	base_cmd->emit_aligned(base_cmd, 7, GFX_COMPUTE_NOP);
 	resources[0] = bo_dst;
 	resources[1] = bo_shader;
@@ -199,8 +216,9 @@ amdgpu_memset_dispatch_test(amdgpu_device_handle device_handle,
 
 	if (user_queue) {
 		ring_context->pm4_dw = ib_info.size;
-		ip_block->funcs->userq_submit(device_handle, ring_context, ip_block->type,
-				       mc_address_cmd);
+		r = ip_block->funcs->userq_submit(device_handle, ring_context, ip_block->type,
+						  mc_address_cmd);
+		igt_assert_eq(r, 0);
 		seq_no = ring_context->point;
 	} else {
 		r = amdgpu_cs_submit(context_handle, 0, &ibs_request, 1);
@@ -232,7 +250,7 @@ amdgpu_memset_dispatch_test(amdgpu_device_handle device_handle,
 	}
 
 	/* The shader only filled the buffer if the submission completed. */
-	if (!user_queue && r == 0) {
+	if (r == 0) {
 		for (i = 0; i < bo_dst_size; i++)
 			igt_assert_f(ptr_dst[i] == 0x22,
 				     "dst mismatch at byte %d of %d: got 0x%02x, expected 0x22\n",
@@ -320,10 +338,13 @@ amdgpu_memcpy_dispatch_test(amdgpu_device_handle device_handle,
 	memset(ptr_cmd, 0, bo_cmd_size);
 	base_cmd->attach_buf(base_cmd, ptr_cmd, bo_cmd_size);
 
-	r = amdgpu_bo_alloc_and_map(device_handle, bo_shader_size, 4096,
-					AMDGPU_GEM_DOMAIN_VRAM, 0,
+	r = amdgpu_bo_alloc_and_map_sync(device_handle, bo_shader_size, 4096,
+					AMDGPU_GEM_DOMAIN_VRAM, 0, 0,
 					&bo_shader, &ptr_shader,
-					&mc_address_shader, &va_shader);
+					&mc_address_shader, &va_shader,
+					user_queue ? ring_context->timeline_syncobj_handle : 0,
+					user_queue ? ++ring_context->point : 0,
+					user_queue);
 	igt_assert_eq(r, 0);
 	memset(ptr_shader, 0, bo_shader_size);
 
@@ -331,17 +352,30 @@ amdgpu_memcpy_dispatch_test(amdgpu_device_handle device_handle,
 	r = amdgpu_dispatch_load_cs_shader(ptr_shader, cs_type, version);
 	igt_assert_eq(r, 0);
 
-	r = amdgpu_bo_alloc_and_map(device_handle, bo_dst_size, 4096,
-					AMDGPU_GEM_DOMAIN_VRAM, 0,
+	r = amdgpu_bo_alloc_and_map_sync(device_handle, bo_dst_size, 4096,
+					AMDGPU_GEM_DOMAIN_VRAM, 0, 0,
 					&bo_src, (void **)&ptr_src,
-					&mc_address_src, &va_src);
+					&mc_address_src, &va_src,
+					user_queue ? ring_context->timeline_syncobj_handle : 0,
+					user_queue ? ++ring_context->point : 0,
+					user_queue);
 	igt_assert_eq(r, 0);
 
-	r = amdgpu_bo_alloc_and_map(device_handle, bo_dst_size, 4096,
-					AMDGPU_GEM_DOMAIN_VRAM, 0,
+	r = amdgpu_bo_alloc_and_map_sync(device_handle, bo_dst_size, 4096,
+					AMDGPU_GEM_DOMAIN_VRAM, 0, 0,
 					&bo_dst, (void **)&ptr_dst,
-					&mc_address_dst, &va_dst);
+					&mc_address_dst, &va_dst,
+					user_queue ? ring_context->timeline_syncobj_handle : 0,
+					user_queue ? ++ring_context->point : 0,
+					user_queue);
 	igt_assert_eq(r, 0);
+	/* A user queue doesn't wait for the page table updates by itself */
+	if (user_queue) {
+		r = amdgpu_timeline_syncobj_wait(device_handle,
+						 ring_context->timeline_syncobj_handle,
+						 ring_context->point);
+		igt_assert_eq(r, 0);
+	}
 	///TODO helper function for this bloc
 	amdgpu_dispatch_init(ip_type, base_cmd,  version);
 	/*  Issue commands to set cu mask used in current dispatch */
@@ -407,6 +441,10 @@ amdgpu_memcpy_dispatch_test(amdgpu_device_handle device_handle,
 	base_cmd->emit(base_cmd, 1);
 	base_cmd->emit(base_cmd, 1);
 
+	/* Nothing waits for the dispatch on a user queue but the IB itself */
+	if (user_queue)
+		amdgpu_dispatch_write_sync(base_cmd, version);
+
 	base_cmd->emit_aligned(base_cmd, 7, GFX_COMPUTE_NOP); /* type3 nop packet */
 
 	resources[0] = bo_shader;
@@ -429,8 +467,8 @@ amdgpu_memcpy_dispatch_test(amdgpu_device_handle device_handle,
 	ibs_request.fence_info.handle = NULL;
 	if (user_queue) {
 		ring_context->pm4_dw = ib_info.size;
-		ip_block->funcs->userq_submit(device_handle, ring_context, ip_block->type,
-				       mc_address_cmd);
+		r = ip_block->funcs->userq_submit(device_handle, ring_context, ip_block->type,
+						  mc_address_cmd);
 		seq_no = ring_context->point;
 	} else {
 		r = amdgpu_cs_submit(context_handle_in_use, 0, &ibs_request, 1);
@@ -455,10 +493,9 @@ amdgpu_memcpy_dispatch_test(amdgpu_device_handle device_handle,
 	}
 
 	if (!hang) {
-		if (!user_queue) {
-		    igt_assert_eq(r, 0);
-		    igt_assert_eq(expired, true);
-		}
+		igt_assert_eq(r, 0);
+		if (!user_queue)
+			igt_assert_eq(expired, true);
 
 		/* verify if memcpy test result meets with expected */
 		i = 0;

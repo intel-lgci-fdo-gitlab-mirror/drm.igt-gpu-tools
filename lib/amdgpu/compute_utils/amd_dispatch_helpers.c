@@ -99,6 +99,50 @@ amdgpu_dispatch_write_cumask(struct amdgpu_cmd_base *base, uint32_t version)
 	return base->cdw - offset_prev;
 }
 
+/*
+ * The fence the kernel emits after a job on a kernel queue waits for the
+ * dispatched waves and writes the caches back. A user queue only signals its
+ * fence after the IB, so the IB has to do that itself before the results can be
+ * read: wait for the dispatches to finish, then write back and invalidate the
+ * caches like the kernel's emit_mem_sync does.
+ */
+int
+amdgpu_dispatch_write_sync(struct amdgpu_cmd_base *base, uint32_t version)
+{
+	int offset_prev = base->cdw;
+
+	/* EVENT_WRITE: CS_PARTIAL_FLUSH, wait for the dispatches to finish */
+	base->emit(base, PACKET3_COMPUTE(PACKET3_EVENT_WRITE, 0));
+	base->emit(base, 0x7 | (4 << 8));
+
+	if (version == 9) {
+		/* ACQUIRE_MEM: CP_COHER_CNTL SH_ICACHE, SH_KCACHE, TC, TCL1 and TC_WB actions */
+		base->emit(base, PACKET3_COMPUTE(PACKET3_ACQUIRE_MEM, 5));
+		base->emit(base, (1 << 29) | (1 << 27) | (1 << 23) | (1 << 22) | (1 << 18));
+		base->emit(base, 0xffffffff);	/* CP_COHER_SIZE */
+		base->emit(base, 0xffffff);	/* CP_COHER_SIZE_HI */
+		base->emit(base, 0);		/* CP_COHER_BASE */
+		base->emit(base, 0);		/* CP_COHER_BASE_HI */
+		base->emit(base, 0xa);		/* POLL_INTERVAL */
+	} else {
+		/*
+		 * ACQUIRE_MEM: GCR_CNTL GL2 and GLM write back and invalidate,
+		 * GL1, GLV, GLK and GLI invalidate
+		 */
+		base->emit(base, PACKET3_COMPUTE(PACKET3_ACQUIRE_MEM, 6));
+		base->emit(base, 0);		/* CP_COHER_CNTL */
+		base->emit(base, 0xffffffff);	/* CP_COHER_SIZE */
+		base->emit(base, 0xffffff);	/* CP_COHER_SIZE_HI */
+		base->emit(base, 0);		/* CP_COHER_BASE */
+		base->emit(base, 0);		/* CP_COHER_BASE_HI */
+		base->emit(base, 0xa);		/* POLL_INTERVAL */
+		base->emit(base, (1 << 15) | (1 << 14) | (1 << 5) | (1 << 4) |
+			   (1 << 9) | (1 << 8) | (1 << 7) | (1 << 0));
+	}
+
+	return base->cdw - offset_prev;
+}
+
 
 int amdgpu_dispatch_write2hw(struct amdgpu_cmd_base *base, uint64_t shader_addr, uint32_t version, enum  cmd_error_type hang)
 {

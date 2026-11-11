@@ -44,5 +44,7 @@ int amdgpu_memcpy_dispatch_test(amdgpu_device_handle device_handle,
 void amdgpu_dispatch_hang_slow_helper(amdgpu_device_handle device_handle,
 				      uint32_t ip_type, const struct pci_addr *pci, bool userq);
 
+void amdgpu_userq_dispatch_test(amdgpu_device_handle device_handle, uint32_t ip_type);
+
 
 #endif

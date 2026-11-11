@@ -839,6 +839,30 @@ amdgpu_dispatch_hang_slow_helper(amdgpu_device_handle device_handle,
 	}
 }
 
+/*
+ * Run the buffer clear and the buffer copy shaders on a user queue and check
+ * what they wrote.
+ */
+void amdgpu_userq_dispatch_test(amdgpu_device_handle device_handle, uint32_t ip_type)
+{
+	struct drm_amdgpu_info_hw_ip info;
+	uint32_t version;
+	int r;
+
+	r = amdgpu_query_hw_ip_info(device_handle, ip_type, 0, &info);
+	igt_assert_eq(r, 0);
+	version = info.hw_ip_version_major;
+	igt_require_f(version >= 9 && version <= 12,
+		      "unsupported gfx version %u\n", version);
+
+	amdgpu_memset_dispatch_test(device_handle, ip_type, AMDGPU_CTX_PRIORITY_NORMAL,
+				    version, true);
+	r = amdgpu_memcpy_dispatch_test(device_handle, NULL, ip_type, 0,
+					AMDGPU_CTX_PRIORITY_NORMAL, version,
+					BACKEND_SE_GC_SHADER_EXEC_SUCCESS, NULL, true);
+	igt_assert_eq(r, 0);
+}
+
 void amdgpu_gfx_dispatch_test(amdgpu_device_handle device_handle, uint32_t ip_type,
 		enum cmd_error_type hang, const struct pci_addr *pci,  bool userq)
 {

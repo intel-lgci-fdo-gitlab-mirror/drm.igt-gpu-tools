@@ -241,6 +241,26 @@ int igt_main()
 		amd_lockdep_end(&lockdep);
 	}
 
+	igt_describe("Run the buffer clear and copy shaders on a compute user queue and check the results");
+	igt_subtest_with_dynamic("amdgpu-dispatch-shader-test-compute-with-IP-COMPUTE-UMQ") {
+		amd_lockdep_begin(&lockdep);
+		if (enable_test && userq_arr_cap[AMD_IP_COMPUTE]) {
+			igt_dynamic_f("amdgpu-dispatch-shader-test-compute-umq")
+			amdgpu_userq_dispatch_test(device, AMDGPU_HW_IP_COMPUTE);
+		}
+		amd_lockdep_end(&lockdep);
+	}
+
+	igt_describe("Run the buffer clear and copy shaders on a gfx user queue and check the results");
+	igt_subtest_with_dynamic("amdgpu-dispatch-shader-test-gfx-with-IP-GFX-UMQ") {
+		amd_lockdep_begin(&lockdep);
+		if (enable_test && userq_arr_cap[AMD_IP_GFX]) {
+			igt_dynamic_f("amdgpu-dispatch-shader-test-gfx-umq")
+			amdgpu_userq_dispatch_test(device, AMDGPU_HW_IP_GFX);
+		}
+		amd_lockdep_end(&lockdep);
+	}
+
 	igt_fixture() {
 		amdgpu_device_deinitialize(device);
 		drm_close_driver(fd);

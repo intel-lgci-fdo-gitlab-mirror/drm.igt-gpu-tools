@@ -33,6 +33,7 @@
 #define FAMILY_GFX1154 0x9a
 #define FAMILY_GFX1037 0x97
 #define FAMILY_GFX1200 0x98
+#define FAMILY_GFX1300 0x99
 
 // AMDGPU_FAMILY_IS(familyId, familyName)
 #define FAMILY_IS(f, fn)     (f == FAMILY_##fn)
@@ -116,6 +117,7 @@
 #define AMDGPU_GFX1153_RANGE     0x50, 0xC0 //# 80 <= x < 192
 #define AMDGPU_GFX1154_RANGE     0x01, 0x80 //# 01 <= x < 128
 #define AMDGPU_GFX1200_RANGE     0x01, 0xFF //# 01 <= x < 255
+#define AMDGPU_GFX1300_RANGE     0x01, 0x50 //# 01 <= x < 80
 
 #define AMDGPU_EXPAND_FIX(x) x
 #define AMDGPU_RANGE_HELPER(val, min, max) ((val >= min) && (val < max))
@@ -185,5 +187,6 @@
 #define ASICREV_IS_GFX1152(r)          ASICREV_IS(r, GFX1152)
 #define ASICREV_IS_GFX1153(r)          ASICREV_IS(r, GFX1153)
 #define ASICREV_IS_GFX1200(r)          ASICREV_IS(r, GFX1200)
+#define ASICREV_IS_GFX1300(r)          ASICREV_IS(r, GFX1300)
 
 #endif // _AMDGPU_ASIC_ADDR_H

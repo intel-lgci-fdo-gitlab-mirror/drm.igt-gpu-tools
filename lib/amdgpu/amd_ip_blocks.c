@@ -1486,6 +1486,7 @@ int setup_amdgpu_ip_blocks(uint32_t major, uint32_t minor, struct amdgpu_gpu_inf
 		{"GFX10_3",				GFX10_3},
 		{"GFX11",				GFX11},
 		{"GFX12",				GFX12},
+		{"GFX13",				GFX13},
 		{},
 	};
 	struct chip_info *info = &g_chip;
@@ -1578,6 +1579,9 @@ int setup_amdgpu_ip_blocks(uint32_t major, uint32_t minor, struct amdgpu_gpu_inf
 	case FAMILY_GFX1200:
 		identify_chip(GFX1200);
 		break;
+	case FAMILY_GFX1300:
+		identify_chip(GFX1300);
+		break;
 	}
 	if (!info->name) {
 		igt_info("amdgpu: unknown (family_id, chip_external_rev): (%u, %u)\n",
@@ -1587,7 +1591,9 @@ int setup_amdgpu_ip_blocks(uint32_t major, uint32_t minor, struct amdgpu_gpu_inf
 	igt_info("amdgpu: %s (family_id, chip_external_rev): (%u, %u)\n",
 				info->name, amdinfo->family_id, amdinfo->chip_external_rev);
 
-	if (info->family >= CHIP_GFX1200) {
+	if (info->family >= CHIP_GFX1300) {
+		info->chip_class = GFX13;
+	} else if (info->family >= CHIP_GFX1200) {
 		info->chip_class = GFX12;
 	} else if (info->family >= CHIP_GFX1100) {
 		info->chip_class = GFX11;
@@ -1620,6 +1626,7 @@ int setup_amdgpu_ip_blocks(uint32_t major, uint32_t minor, struct amdgpu_gpu_inf
 	case GFX10_3: /* tested */
 	case GFX11: /* tested */
 	case GFX12: /* tested */
+	case GFX13: /* tested */
 		/* extra precaution if re-factor again */
 		igt_assert_eq(gfx_v8_x_ip_block.major, 8);
 		igt_assert_eq(compute_v8_x_ip_block.major, 8);

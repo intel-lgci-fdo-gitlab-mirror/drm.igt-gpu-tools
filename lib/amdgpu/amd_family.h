@@ -110,6 +110,7 @@ enum radeon_family {
 	CHIP_GFX1153,
 	CHIP_GFX1154,
 	CHIP_GFX1200,
+	CHIP_GFX1300,
 	CHIP_LAST,
 };
 
@@ -130,6 +131,7 @@ enum chip_class {
 	GFX10_3,
 	GFX11,
 	GFX12,
+	GFX13,
 	NUM_GFX_VERSIONS
 };
 

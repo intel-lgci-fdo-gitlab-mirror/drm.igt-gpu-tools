@@ -288,6 +288,10 @@ sdma_ring_const_fill(const struct amdgpu_ip_funcs *func,
 		else
 			context->pm4[i++] = context->write_length;
 	}
+
+	if (context->hw_ip_info.hw_ip_version_major >= 8)
+		context->pm4[i++] = 0;
+
 	*pm4_dw = i;
 
 	return 0;

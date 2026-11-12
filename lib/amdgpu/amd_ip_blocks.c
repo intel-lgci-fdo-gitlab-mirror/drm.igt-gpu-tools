@@ -161,6 +161,9 @@ sdma_ring_write_linear(const struct amdgpu_ip_funcs *func,
 	else
 		ring_context->pm4[i++] = ring_context->write_length / 4;
 
+	if (ring_context->hw_ip_info.hw_ip_version_major >= 8)
+		ring_context->pm4[i++] = 0;
+
 	while (j++ < ring_context->write_length / 4)
 		ring_context->pm4[i++] = func->deadbeaf;
 

@@ -218,7 +218,7 @@ static void page_flip_test(struct test_data *data, igt_output_t *output,
 	for (frame_count = 0; frame_count <= frame_num; frame_count++) {
 		ret = drmModePageFlip(data->fd, output->config.crtc->crtc_id,
 				data->flip_fb->fb_id, DRM_MODE_PAGE_FLIP_EVENT, NULL);
-		igt_require(ret == 0);
+		igt_assert_eq(ret, 0);
 		kmstest_wait_for_pageflip(data->fd);
 
 		if ((test_mode == TEST_MODE_CONSTANT_LIVE || test_mode == TEST_MODE_INTERMITTENT_LIVE)

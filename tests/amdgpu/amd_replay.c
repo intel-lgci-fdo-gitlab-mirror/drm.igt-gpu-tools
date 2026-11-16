@@ -227,7 +227,7 @@ static void page_flip_test(struct test_data *data, igt_output_t *output,
 			replay_state = igt_amd_read_replay_state(data->fd, output->name);
 			dpcd_read_byte(data->fd, output->config.connector, 0x378, &panel_dpcd);
 			igt_debug("replay_state live mode = 0x%X\n", replay_state);
-			igt_fail_on_f(replay_state < REPLAY_STATE_4 && replay_state >= REPLAY_STATE_5,
+			igt_fail_on_f(replay_state < REPLAY_STATE_4 || replay_state >= REPLAY_STATE_5,
 					"State should be REPLAY_STATE_4 (Active with single frame update)\n");
 			igt_fail_on_f(panel_dpcd == 0, "Panel is not in replay mode\n");
 		}
@@ -294,7 +294,7 @@ static void run_check_replay(struct test_data *data, enum test_mode test_mode)
 			replay_state = igt_amd_read_replay_state(data->fd, output->name);
 			dpcd_read_byte(data->fd, output->config.connector, 0x378, &panel_dpcd);
 			igt_debug("replay_state static mode = 0x%X\n", replay_state);
-			igt_fail_on_f(replay_state < REPLAY_STATE_3 && replay_state >= REPLAY_STATE_4,
+			igt_fail_on_f(replay_state < REPLAY_STATE_3 || replay_state >= REPLAY_STATE_4,
 				 "State should be REPLAY_STATE_3 (Active)\n");
 			igt_fail_on_f(panel_dpcd == 0, "Panel is not in replay mode\n");
 		}
@@ -310,7 +310,7 @@ static void run_check_replay(struct test_data *data, enum test_mode test_mode)
 			dpcd_read_byte(data->fd, output->config.connector, 0x378, &panel_dpcd);
 			igt_debug("replay_state TEST_MODE_INTERMITTENT_LIVE after flip = 0x%X\n",
 				 replay_state);
-			igt_fail_on_f(replay_state < REPLAY_STATE_3 && replay_state >= REPLAY_STATE_4,
+			igt_fail_on_f(replay_state < REPLAY_STATE_3 || replay_state >= REPLAY_STATE_4,
 				 "State should be REPLAY_STATE_3 (Active)\n");
 			igt_fail_on_f(panel_dpcd == 0, "Panel is not in replay mode\n");
 		}
@@ -365,7 +365,7 @@ static void run_check_replay_suspend(struct test_data *data)
 		replay_state = igt_amd_read_replay_state(data->fd, output->name);
 		dpcd_read_byte(data->fd, output->config.connector, 0x378, &panel_dpcd);
 		igt_debug("replay_state static mode = 0x%X\n", replay_state);
-		igt_fail_on_f(replay_state < REPLAY_STATE_3 && replay_state >= REPLAY_STATE_4,
+		igt_fail_on_f(replay_state < REPLAY_STATE_3 || replay_state >= REPLAY_STATE_4,
 			 "State should be REPLAY_STATE_3 (Active)\n");
 		igt_fail_on_f(panel_dpcd == 0, "Panel is not in replay mode\n");
 

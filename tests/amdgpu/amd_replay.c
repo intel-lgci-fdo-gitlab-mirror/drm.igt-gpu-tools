@@ -159,7 +159,6 @@ static bool dpcd_read_byte(int drm_fd,
 {
 	DIR *dir;
 	int dir_fd;
-	uint8_t buf[16] = {0};
 	*val = 0;
 
 	dir_fd = igt_connector_sysfs_open(drm_fd, connector);
@@ -171,7 +170,7 @@ static bool dpcd_read_byte(int drm_fd,
 	for (;;) {
 		struct dirent *ent;
 		char path[5 + sizeof(ent->d_name)];
-		int fd, ret, i, j, k;
+		int fd, ret;
 
 		ent = readdir(dir);
 		if (!ent)
@@ -185,31 +184,17 @@ static bool dpcd_read_byte(int drm_fd,
 		fd = open(path, O_RDONLY);
 		igt_assert(fd >= 0);
 
-		k = (addr / 16) + 1;
-		j = addr % 16;
-
-		/* read 16 bytes each loop */
-		for (i = 0; i < k; i++) {
-			ret = read(fd, buf, sizeof(buf));
-			if (ret < 0)
-				break;
-			if (ret != sizeof(buf))
-				break;
-		}
+		ret = pread(fd, val, 1, addr);
 
 		close(fd);
 
+		/* closedir() also closes dir_fd */
 		closedir(dir);
-		close(dir_fd);
 
-		if (ret > 0)
-			*val = buf[j];
-
-		return (ret > 0);
+		return (ret == 1);
 	}
 
 	closedir(dir);
-	close(dir_fd);
 
 	igt_skip("Missing /dev/drm_dp_aux*, check DRM_DISPLAY_DP_AUX_CHARDEV in kernel config\n");
 

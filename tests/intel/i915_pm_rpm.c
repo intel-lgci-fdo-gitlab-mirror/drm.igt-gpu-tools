@@ -1432,7 +1432,7 @@ int igt_main_args("", long_options, help_str, opt_handler, NULL)
 		igt_i915_driver_unload();
 
 		igt_kmsg(KMSG_INFO "Reloading i915 w/o display\n");
-		igt_assert_eq(igt_i915_driver_load("disable_display=1 mmio_debug=-1"), 0);
+		igt_assert_eq(igt_i915_driver_load("disable_display=1"), 0);
 
 		igt_assert(setup_environment(false));
 		pci_dev = igt_device_get_pci_device(drm_fd);
@@ -1443,7 +1443,7 @@ int igt_main_args("", long_options, help_str, opt_handler, NULL)
 		igt_i915_driver_unload();
 
 		igt_kmsg(KMSG_INFO "Reloading i915 as normal\n");
-		igt_assert_eq(igt_i915_driver_load("mmio_debug=-1"), 0);
+		igt_assert_eq(igt_i915_driver_load(""), 0);
 
 		igt_assert(setup_environment(true));
 		pci_dev = igt_device_get_pci_device(drm_fd);

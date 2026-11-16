@@ -360,6 +360,76 @@ static void colorop_plane_test(igt_display_t *display,
 	}
 }
 
+/*
+ * Per-group state. The setup is done on demand by the first subtest of the
+ * group that actually runs, so running a single subtest doesn't pay for
+ * the writeback probing and framebuffer creation of every other group.
+ */
+struct colorop_group {
+	igt_output_t *output;
+	igt_plane_t *plane;
+	igt_fb_t input_fb;
+	igt_fb_t output_fb;
+	bool setup_tried;
+	bool ready;
+};
+
+static void colorop_group_setup(igt_display_t *display, struct colorop_group *group,
+				__u32 fourcc_in, __u32 fourcc_out, bool pattern)
+{
+	drmModeModeInfo mode;
+	unsigned int fb_id;
+
+	if (group->setup_tried) {
+		igt_require_f(group->ready, "Subtest group setup failed or was skipped\n");
+		return;
+	}
+	group->setup_tried = true;
+
+	group->output = kms_writeback_get_output(display, fourcc_in, fourcc_out);
+	igt_require(group->output);
+
+	if (group->output->use_override_mode)
+		mode = group->output->override_mode;
+	else
+		mode = group->output->config.default_mode;
+
+	group->plane = igt_output_get_plane_type(group->output, DRM_PLANE_TYPE_PRIMARY);
+	igt_assert(group->plane);
+	igt_require(igt_plane_has_prop(group->plane, IGT_PLANE_COLOR_PIPELINE));
+
+	if (pattern) {
+		/* RGB input fb shared across the group's subtests */
+		fb_id = igt_create_color_pattern_fb(display->drm_fd, mode.hdisplay, mode.vdisplay,
+						    fourcc_in, DRM_FORMAT_MOD_LINEAR,
+						    0.2, 0.2, 0.2, &group->input_fb);
+		igt_assert(fb_id > 0);
+		igt_plane_set_fb(group->plane, &group->input_fb);
+
+		if (data.dump_check)
+			igt_dump_fb(display, &group->input_fb, ".", "input");
+	} else {
+		/* YUV subtests create their own input fb, keep the plane active in between */
+		fb_id = igt_create_fb(display->drm_fd, mode.hdisplay, mode.vdisplay, fourcc_in,
+				      igt_fb_mod_to_tiling(0), &group->input_fb);
+		igt_require(fb_id > 0);
+	}
+
+	fb_id = igt_create_fb(display->drm_fd, mode.hdisplay, mode.vdisplay, fourcc_out,
+			      igt_fb_mod_to_tiling(0), &group->output_fb);
+	igt_require(fb_id > 0);
+
+	group->ready = true;
+}
+
+static void colorop_group_fini(igt_display_t *display, struct colorop_group *group)
+{
+	if (group->output)
+		igt_detach_crtc(display, group->output);
+	igt_remove_fb(display->drm_fd, &group->input_fb);
+	igt_remove_fb(display->drm_fd, &group->output_fb);
+}
+
 static void check_plane_colorop_ids(igt_display_t *display)
 {
 	igt_plane_t *plane;
@@ -539,177 +609,76 @@ int igt_main_args("d", long_options, help_str, opt_handler, NULL)
 
 	/* RGB format tests */
 	for (j = 0; j < ARRAY_SIZE(formats_rgb); j++) {
-		igt_output_t *output;
-		igt_plane_t *plane;
-		igt_fb_t input_fb, output_fb;
-		unsigned int fb_id;
-		drmModeModeInfo mode;
+		static struct colorop_group group;
+
+		group = (struct colorop_group){ 0 };
 
 		igt_subtest_group() {
-			igt_fixture() {
-				output = kms_writeback_get_output(&display,
-								  formats_rgb[j].fourcc_in,
-								  formats_rgb[j].fourcc_out);
-				igt_require(output);
-
-				if (output->use_override_mode)
-					memcpy(&mode, &output->override_mode, sizeof(mode));
-				else
-					memcpy(&mode, &output->config.default_mode, sizeof(mode));
-
-				/* create input fb */
-				plane = igt_output_get_plane_type(output, DRM_PLANE_TYPE_PRIMARY);
-				igt_assert(plane);
-				igt_require(igt_plane_has_prop(plane, IGT_PLANE_COLOR_PIPELINE));
-
-				fb_id = igt_create_color_pattern_fb(display.drm_fd,
-								mode.hdisplay, mode.vdisplay,
-								formats_rgb[j].fourcc_in, DRM_FORMAT_MOD_LINEAR,
-								0.2, 0.2, 0.2, &input_fb);
-				igt_assert(fb_id >= 0);
-				igt_plane_set_fb(plane, &input_fb);
-
-				if (data.dump_check)
-					igt_dump_fb(&display, &input_fb, ".", "input");
-
-				/* create output fb */
-				fb_id = igt_create_fb(display.drm_fd, mode.hdisplay, mode.vdisplay,
-							formats_rgb[j].fourcc_out,
-							igt_fb_mod_to_tiling(0),
-							&output_fb);
-				igt_require(fb_id > 0);
-			}
-
 			/* Run RGB tests */
 			for (i = 0; i < ARRAY_SIZE(tests_rgb); i++) {
 				igt_describe("Check color ops on a plane");
-				igt_subtest_f("plane-%s-%s", formats_rgb[j].name, tests_rgb[i].name)
+				igt_subtest_f("plane-%s-%s", formats_rgb[j].name, tests_rgb[i].name) {
+					colorop_group_setup(&display, &group,
+							    formats_rgb[j].fourcc_in,
+							    formats_rgb[j].fourcc_out, true);
 					colorop_plane_test(&display,
-							output,
-							plane,
-							&input_fb,
-							&output_fb,
+							group.output,
+							group.plane,
+							&group.input_fb,
+							&group.output_fb,
 							formats_rgb[j].fourcc_in,
 							formats_rgb[j].fourcc_out,
 							tests_rgb[i].colorops,
 							false);
+				}
 			}
 
 			igt_fixture() {
-				igt_detach_crtc(&display, output);
-				igt_remove_fb(display.drm_fd, &input_fb);
-				igt_remove_fb(display.drm_fd, &output_fb);
-
+				colorop_group_fini(&display, &group);
 			}
 		}
 	}
 
 	/* Bypass transition tests - RGB formats */
 	for (j = 0; j < ARRAY_SIZE(formats_rgb); j++) {
-		igt_output_t *output;
-		igt_plane_t *plane;
-		igt_fb_t input_fb, output_fb;
-		unsigned int fb_id;
-		drmModeModeInfo mode;
+		static struct colorop_group group;
+
+		group = (struct colorop_group){ 0 };
 
 		igt_subtest_group() {
-			igt_fixture() {
-				output = kms_writeback_get_output(&display,
-								  formats_rgb[j].fourcc_in,
-								  formats_rgb[j].fourcc_out);
-				igt_require(output);
-
-				if (output->use_override_mode)
-					memcpy(&mode, &output->override_mode, sizeof(mode));
-				else
-					memcpy(&mode, &output->config.default_mode, sizeof(mode));
-
-				/* create input fb */
-				plane = igt_output_get_plane_type(output, DRM_PLANE_TYPE_PRIMARY);
-				igt_assert(plane);
-				igt_require(igt_plane_has_prop(plane, IGT_PLANE_COLOR_PIPELINE));
-
-				fb_id = igt_create_color_pattern_fb(display.drm_fd,
-								mode.hdisplay, mode.vdisplay,
-								formats_rgb[j].fourcc_in, DRM_FORMAT_MOD_LINEAR,
-								0.2, 0.2, 0.2, &input_fb);
-				igt_assert(fb_id >= 0);
-				igt_plane_set_fb(plane, &input_fb);
-
-				if (data.dump_check)
-					igt_dump_fb(&display, &input_fb, ".", "input");
-
-				/* create output fb */
-				fb_id = igt_create_fb(display.drm_fd, mode.hdisplay, mode.vdisplay,
-							formats_rgb[j].fourcc_out,
-							igt_fb_mod_to_tiling(0),
-							&output_fb);
-				igt_require(fb_id > 0);
-			}
-
 			/* Run bypass transition tests */
 			for (i = 0; i < ARRAY_SIZE(tests_bypass_transitions_rgb); i++) {
 				igt_describe("Test color pipeline to bypass transition");
-				igt_subtest_f("plane-bypass-%s-%s", formats_rgb[j].name, tests_bypass_transitions_rgb[i].name)
+				igt_subtest_f("plane-bypass-%s-%s", formats_rgb[j].name, tests_bypass_transitions_rgb[i].name) {
+					colorop_group_setup(&display, &group,
+							    formats_rgb[j].fourcc_in,
+							    formats_rgb[j].fourcc_out, true);
 					colorop_plane_test(&display,
-							output,
-							plane,
-							&input_fb,
-							&output_fb,
+							group.output,
+							group.plane,
+							&group.input_fb,
+							&group.output_fb,
 							formats_rgb[j].fourcc_in,
 							formats_rgb[j].fourcc_out,
 							tests_bypass_transitions_rgb[i].colorops,
 							true);
+				}
 			}
 
 			igt_fixture() {
-				igt_detach_crtc(&display, output);
-				igt_remove_fb(display.drm_fd, &input_fb);
-				igt_remove_fb(display.drm_fd, &output_fb);
-
+				colorop_group_fini(&display, &group);
 			}
 		}
 	}
 
 	/* YUV format tests */
 	for (j = 0; j < ARRAY_SIZE(formats_yuv); j++) {
-		igt_output_t *output;
-		igt_plane_t *plane;
-		igt_fb_t temp_fb, output_fb;
+		static struct colorop_group group;
 		unsigned int fb_id;
-		drmModeModeInfo mode;
+
+		group = (struct colorop_group){ 0 };
 
 		igt_subtest_group() {
-			igt_fixture() {
-				output = kms_writeback_get_output(&display,
-								  formats_yuv[j].fourcc_in,
-								  formats_yuv[j].fourcc_out);
-				igt_require(output);
-
-				if (output->use_override_mode)
-					memcpy(&mode, &output->override_mode, sizeof(mode));
-				else
-					memcpy(&mode, &output->config.default_mode, sizeof(mode));
-
-				plane = igt_output_get_plane_type(output, DRM_PLANE_TYPE_PRIMARY);
-				igt_assert(plane);
-				igt_require(igt_plane_has_prop(plane, IGT_PLANE_COLOR_PIPELINE));
-
-				/* Create temp fb to keep plane active between tests */
-				fb_id = igt_create_fb(display.drm_fd, mode.hdisplay, mode.vdisplay,
-							formats_yuv[j].fourcc_in,
-							igt_fb_mod_to_tiling(0),
-							&temp_fb);
-				igt_require(fb_id > 0);
-
-				/* Create output fb shared across tests */
-				fb_id = igt_create_fb(display.drm_fd, mode.hdisplay, mode.vdisplay,
-							formats_yuv[j].fourcc_out,
-							igt_fb_mod_to_tiling(0),
-							&output_fb);
-				igt_require(fb_id > 0);
-			}
-
 			/* Run YUV tests - create input_fb per test */
 			for (i = 0; i < ARRAY_SIZE(tests_yuv); i++) {
 				igt_describe("Check YUV CSC colorop");
@@ -718,6 +687,10 @@ int igt_main_args("d", long_options, help_str, opt_handler, NULL)
 					enum igt_color_encoding encoding;
 					enum igt_color_range range;
 
+					colorop_group_setup(&display, &group,
+							    formats_yuv[j].fourcc_in,
+							    formats_yuv[j].fourcc_out, false);
+
 					/* Extract encoding and range from first colorop (must be CSC FF) */
 					igt_assert(tests_yuv[i].colorops[0]);
 					igt_assert(tests_yuv[i].colorops[0]->type == KMS_COLOROP_FIXED_MATRIX);
@@ -725,11 +698,11 @@ int igt_main_args("d", long_options, help_str, opt_handler, NULL)
 					encoding = tests_yuv[i].colorops[0]->fixed_matrix_info.encoding;
 					range = tests_yuv[i].colorops[0]->fixed_matrix_info.range;
 
-					igt_skip_on(!get_color_pipeline(&display, plane, tests_yuv[i].colorops));
+					igt_skip_on(!get_color_pipeline(&display, group.plane, tests_yuv[i].colorops));
 
 					/* Create input fb with matching encoding/range */
 					fb_id = igt_create_color_pattern_fb_yuv(display.drm_fd,
-									mode.hdisplay, mode.vdisplay,
+									group.input_fb.width, group.input_fb.height,
 									formats_yuv[j].fourcc_in, DRM_FORMAT_MOD_LINEAR,
 									encoding, range,
 									0.2, 0.2, 0.2, &input_fb);
@@ -739,17 +712,17 @@ int igt_main_args("d", long_options, help_str, opt_handler, NULL)
 						igt_dump_fb(&display, &input_fb, ".", "input");
 
 					colorop_plane_test(&display,
-							output,
-							plane,
+							group.output,
+							group.plane,
 							&input_fb,
-							&output_fb,
+							&group.output_fb,
 							formats_yuv[j].fourcc_in,
 							formats_yuv[j].fourcc_out,
 							tests_yuv[i].colorops,
 							false);
 
-					/* Switch plane back to temp_fb to keep CRTC active */
-					igt_plane_set_fb(plane, &temp_fb);
+					/* Restore the group's input fb to keep CRTC active */
+					igt_plane_set_fb(group.plane, &group.input_fb);
 					igt_display_commit_atomic(&display,
 								DRM_MODE_ATOMIC_ALLOW_MODESET,
 								NULL);
@@ -759,9 +732,7 @@ int igt_main_args("d", long_options, help_str, opt_handler, NULL)
 			}
 
 			igt_fixture() {
-				igt_detach_crtc(&display, output);
-				igt_remove_fb(display.drm_fd, &temp_fb);
-				igt_remove_fb(display.drm_fd, &output_fb);
+				colorop_group_fini(&display, &group);
 			}
 		}
 	}

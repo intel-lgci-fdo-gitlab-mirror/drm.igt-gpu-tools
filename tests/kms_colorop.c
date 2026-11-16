@@ -122,12 +122,13 @@
  *
  */
 
-static bool check_writeback_config(igt_display_t *display, igt_output_t *output,
+static igt_crtc_t *check_writeback_config(igt_display_t *display, igt_output_t *output,
 				    drmModeModeInfo override_mode, __u32 fourcc_in,
 				    __u32 fourcc_out)
 {
-	igt_fb_t input_fb, output_fb;
+	igt_fb_t input_fb = {}, output_fb = {};
 	igt_plane_t *plane;
+	igt_crtc_t *crtc, *found_crtc = NULL;
 	uint32_t writeback_format = fourcc_out;
 	uint64_t modifier = DRM_FORMAT_MOD_LINEAR;
 	int width, height, ret;
@@ -141,14 +142,6 @@ static bool check_writeback_config(igt_display_t *display, igt_output_t *output,
 	width = override_mode.hdisplay;
 	height = override_mode.vdisplay;
 
-	plane = igt_output_get_plane_type(output, DRM_PLANE_TYPE_PRIMARY);
-	igt_skip_on_f(!igt_plane_has_format_mod(plane, fourcc_in, DRM_FORMAT_MOD_LINEAR),
-		      "plane doesn't support fourcc format %x\n", fourcc_in);
-
-	ret = igt_create_fb(display->drm_fd, width, height,
-			    fourcc_in, modifier, &input_fb);
-	igt_assert(ret >= 0);
-
 	/* check writeback formats */
 	wb_formats_blob = igt_get_writeback_formats_blob(output);
 	format = wb_formats_blob->data;
@@ -157,23 +150,56 @@ static bool check_writeback_config(igt_display_t *display, igt_output_t *output,
 		if (fourcc_out == format[i])
 			found_format = true;
 
-	igt_skip_on_f(!found_format,
-		      "writeback doesn't support fourcc format %x\n", fourcc_out);
+	drmModeFreePropertyBlob(wb_formats_blob);
 
-	ret = igt_create_fb(display->drm_fd, width, height,
-			    writeback_format, modifier, &output_fb);
-	igt_assert(ret >= 0);
+	if (!found_format) {
+		igt_debug("writeback doesn't support fourcc format %x\n", fourcc_out);
+		return NULL;
+	}
 
-	igt_plane_set_fb(plane, &input_fb);
-	igt_output_set_writeback_fb(output, &output_fb);
+	for_each_crtc(display, crtc) {
+		igt_output_set_crtc(output, crtc);
 
-	ret = igt_display_try_commit_atomic(display, DRM_MODE_ATOMIC_TEST_ONLY |
-					    DRM_MODE_ATOMIC_ALLOW_MODESET, NULL);
-	igt_plane_set_fb(plane, NULL);
+		plane = igt_output_get_plane_type(output, DRM_PLANE_TYPE_PRIMARY);
+		if (!igt_plane_has_format_mod(plane, fourcc_in, DRM_FORMAT_MOD_LINEAR)) {
+			igt_output_set_crtc(output, NULL);
+			continue;
+		}
+
+		/* Create the probe fbs once a plane supports fourcc_in */
+		if (!input_fb.fb_id) {
+			ret = igt_create_fb(display->drm_fd, width, height, fourcc_in, modifier, &input_fb);
+			igt_assert(ret >= 0);
+
+			ret = igt_create_fb(display->drm_fd, width, height, writeback_format, modifier, &output_fb);
+			igt_assert(ret >= 0);
+		}
+
+		igt_plane_set_fb(plane, &input_fb);
+		igt_output_set_writeback_fb(output, &output_fb);
+
+		ret = igt_display_try_commit_atomic(display, DRM_MODE_ATOMIC_TEST_ONLY |
+						    DRM_MODE_ATOMIC_ALLOW_MODESET, NULL);
+
+		/* A TEST_ONLY commit leaves the probe state staged */
+		igt_plane_set_fb(plane, NULL);
+		igt_output_set_writeback_fb(output, NULL);
+		igt_output_set_prop_value(output, IGT_CONNECTOR_WRITEBACK_OUT_FENCE_PTR, 0);
+		igt_output_clear_prop_changed(output, IGT_CONNECTOR_WRITEBACK_OUT_FENCE_PTR);
+		igt_output_clear_prop_changed(output, IGT_CONNECTOR_WRITEBACK_FB_ID);
+
+		if (!ret) {
+			found_crtc = crtc;
+			break;
+		}
+
+		igt_output_set_crtc(output, NULL);
+	}
+
 	igt_remove_fb(display->drm_fd, &input_fb);
 	igt_remove_fb(display->drm_fd, &output_fb);
 
-	return !ret;
+	return found_crtc;
 }
 
 typedef struct {
@@ -208,16 +234,12 @@ static igt_output_t *kms_writeback_get_output(igt_display_t *display, __u32 four
 		if (output->config.connector->connector_type != DRM_MODE_CONNECTOR_WRITEBACK)
 			continue;
 
-		for_each_crtc(display, crtc) {
-			igt_output_set_crtc(output,
-					    crtc);
-
-			if (check_writeback_config(display, output, override_mode, fourcc_in, fourcc_out)) {
-				igt_debug("Using connector %u:%s on pipe %s\n",
-					  output->config.connector->connector_id,
-					  output->name, igt_crtc_name(crtc));
-				return output;
-			}
+		crtc = check_writeback_config(display, output, override_mode, fourcc_in, fourcc_out);
+		if (crtc) {
+			igt_debug("Using connector %u:%s on pipe %s\n",
+				  output->config.connector->connector_id,
+				  output->name, igt_crtc_name(crtc));
+			return output;
 		}
 
 		igt_debug("We found %u:%s, but this test will not be able to use it.\n",

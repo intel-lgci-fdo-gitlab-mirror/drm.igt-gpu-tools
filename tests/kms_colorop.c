@@ -285,6 +285,12 @@ static void colorop_plane_test(igt_display_t *display,
 	igt_fb_t sw_transform_fb;
 	int res;
 
+	/* Skip before the costly fb creation and sw transform if no pipeline matches */
+	if (colorops[0]) {
+		color_pipeline = get_color_pipeline(display, plane, colorops);
+		igt_skip_on(!color_pipeline);
+	}
+
 	/* reset color pipeline*/
 
 	igt_plane_set_color_pipeline(plane, NULL);
@@ -311,18 +317,10 @@ static void colorop_plane_test(igt_display_t *display,
 	if (data.dump_check)
 		igt_dump_fb(display, &sw_transform_fb, ".", "sw_transform");
 
-	/* discover and set COLOR PIPELINE */
-
 	if (!colorops[0]) {
 		/* bypass test */
 		igt_plane_set_color_pipeline(plane, NULL);
 	} else {
-		/* get COLOR_PIPELINE enum */
-		color_pipeline = get_color_pipeline(display, plane, colorops);
-
-		/* skip test if we can't find applicable pipeline */
-		igt_skip_on(!color_pipeline);
-
 		set_color_pipeline(display, plane, colorops, color_pipeline);
 	}
 
@@ -726,6 +724,8 @@ int igt_main_args("d", long_options, help_str, opt_handler, NULL)
 
 					encoding = tests_yuv[i].colorops[0]->fixed_matrix_info.encoding;
 					range = tests_yuv[i].colorops[0]->fixed_matrix_info.range;
+
+					igt_skip_on(!get_color_pipeline(&display, plane, tests_yuv[i].colorops));
 
 					/* Create input fb with matching encoding/range */
 					fb_id = igt_create_color_pattern_fb_yuv(display.drm_fd,

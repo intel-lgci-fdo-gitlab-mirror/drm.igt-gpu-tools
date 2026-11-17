@@ -34,9 +34,16 @@
 #define VPE2_VPEC_HMIRROR_CMD_SIZE	(VPE2_VPEC_HMIRROR_CMD_LENGTH * sizeof(uint32_t))
 #define VPE2_VPEP_HMIRROR_CMD_SIZE	(VPE2_VPEP_HMIRROR_CMD_LENGTH * sizeof(uint32_t))
 
+#define VPE3_VPEC_HMIRROR_CMD_LENGTH	56
+#define VPE3_VPEP_HMIRROR_CMD_LENGTH	2601
+#define VPE3_VPEC_HMIRROR_CMD_SIZE	(VPE3_VPEC_HMIRROR_CMD_LENGTH * sizeof(uint32_t))
+#define VPE3_VPEP_HMIRROR_CMD_SIZE	(VPE3_VPEP_HMIRROR_CMD_LENGTH * sizeof(uint32_t))
+
 uint32_t *vpe1_get_vpec_csc_cmd(void);
 uint32_t *vpe1_get_vpep_csc_cmd(void);
 uint32_t *vpe2_get_vpec_hmirror_cmd(void);
 uint32_t *vpe2_get_vpep_hmirror_cmd(void);
+uint32_t *vpe3_get_vpec_hmirror_cmd(void);
+uint32_t *vpe3_get_vpep_hmirror_cmd(void);
 
 #endif /* AMD_VPE_H */

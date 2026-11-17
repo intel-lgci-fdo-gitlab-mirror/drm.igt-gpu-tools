@@ -2644,6 +2644,22 @@ static int get_drm_plane_type(int drm_fd, uint32_t plane_id)
 	return DRM_PLANE_TYPE_OVERLAY;
 }
 
+static void igt_plane_reset_blend_mode(igt_plane_t *plane)
+{
+	bool result;
+
+	result = igt_plane_try_prop_enum(plane, IGT_PLANE_PIXEL_BLEND_MODE, "Pre-multiplied");
+	if (result)
+		return;
+
+	result = igt_plane_try_prop_enum(plane, IGT_PLANE_PIXEL_BLEND_MODE, "Coverage");
+	if (result)
+		return;
+
+	result = igt_plane_try_prop_enum(plane, IGT_PLANE_PIXEL_BLEND_MODE, "None");
+	igt_assert(result);
+}
+
 static void igt_plane_reset(igt_plane_t *plane)
 {
 	igt_display_t *display = plane->crtc->display;
@@ -2679,7 +2695,7 @@ static void igt_plane_reset(igt_plane_t *plane)
 		igt_plane_set_prop_value(plane, IGT_PLANE_ROTATION, IGT_ROTATION_0);
 
 	if (igt_plane_has_prop(plane, IGT_PLANE_PIXEL_BLEND_MODE))
-		igt_plane_set_prop_enum(plane, IGT_PLANE_PIXEL_BLEND_MODE, "Pre-multiplied");
+		igt_plane_reset_blend_mode(plane);
 
 	if (igt_plane_has_prop(plane, IGT_PLANE_ALPHA))
 		igt_plane_set_prop_value(plane, IGT_PLANE_ALPHA, 0xffff);

@@ -141,259 +141,196 @@ static int check_rgba8888_hmirror(void *addr, uint32_t width, uint32_t height)
 	return 0;
 }
 
-static void amdgpu_cs_vpe1_csc(amdgpu_device_handle device_handle,
-				struct mmd_context *context)
+/* The descriptor of a VPE blit test. All the blit tests use this descriptor to
+ * tell the runner function amdgpu_cs_vpe_blit_run how to setup VPE commands and
+ * testing pattern in memory.
+ */
+struct vpe_blit_test {
+	uint32_t *vpec_cmd;
+	uint32_t vpec_cmd_size;
+	uint32_t *vpep_cmd;
+	uint32_t vpep_cmd_size;
+
+	const uint32_t *patch_vpec_index;
+	const uint32_t *patch_vpec_offset;
+	uint32_t num_patch_vpec;
+	const uint32_t *patch_src_plane;
+	const uint32_t *patch_dst_plane;
+	uint32_t num_patch_plane;
+
+	uint32_t height;
+	uint32_t pitch;
+
+	void (*fill_src)(void *addr, uint32_t width, uint32_t height);
+	int (*check_dst)(void *addr, uint32_t width, uint32_t height);
+};
+
+static void amdgpu_cs_vpe_blit_run(amdgpu_device_handle device_handle,
+				   struct mmd_context *context,
+				   const struct vpe_blit_test *test)
 {
-	int r;
+	int i, r;
 	uint32_t frame_size;
 	struct amdgpu_mmd_bo vpep_cmd_bo, src_plane_bo, dst_plane_bo;
-	/* same height and pitch for input and output */
-	const uint32_t height = 256;
-	const uint32_t pitch = 1024;
-	const uint32_t vpep_config_offsets[] = { 0x34, 0x128, 0x184, 0x1c0, };
-
-	uint32_t *vpec_csc_cmd = vpe1_get_vpec_csc_cmd();
-	uint32_t *vpep_csc_cmd = vpe1_get_vpep_csc_cmd();
+	const uint32_t height = test->height;
+	const uint32_t pitch = test->pitch;
 
 	frame_size = pitch * height * 4;
 	context->num_resources = 0;
 
-	alloc_resource(device_handle, &vpep_cmd_bo, VPE1_VPEP_CSC_CMD_SIZE, AMDGPU_GEM_DOMAIN_GTT);
+	/* prepare source image buffer and data */
 	alloc_resource(device_handle, &src_plane_bo, frame_size, AMDGPU_GEM_DOMAIN_GTT);
-	alloc_resource(device_handle, &dst_plane_bo, frame_size, AMDGPU_GEM_DOMAIN_GTT);
-
-	r = amdgpu_bo_cpu_map(vpep_cmd_bo.handle, (void **)&vpep_cmd_bo.ptr);
-	igt_assert_eq(r, 0);
-
 	r = amdgpu_bo_cpu_map(src_plane_bo.handle, (void **)&src_plane_bo.ptr);
 	igt_assert_eq(r, 0);
-
-	r = amdgpu_bo_cpu_map(dst_plane_bo.handle, (void **)&dst_plane_bo.ptr);
+	test->fill_src(src_plane_bo.ptr, pitch, height);
+	r = amdgpu_bo_cpu_unmap(src_plane_bo.handle);
 	igt_assert_eq(r, 0);
 
+	/* prepare destination image buffer */
+	alloc_resource(device_handle, &dst_plane_bo, frame_size, AMDGPU_GEM_DOMAIN_GTT);
+	r = amdgpu_bo_cpu_map(dst_plane_bo.handle, (void **)&dst_plane_bo.ptr);
+	igt_assert_eq(r, 0);
+	memset(dst_plane_bo.ptr, 0, frame_size);
+	r = amdgpu_bo_cpu_unmap(dst_plane_bo.handle);
+	igt_assert_eq(r, 0);
+
+	/* prepare VPEP command buffer and setup command buffer data */
+	alloc_resource(device_handle, &vpep_cmd_bo, test->vpep_cmd_size, AMDGPU_GEM_DOMAIN_GTT);
+	/* patch gpu addr of vpep cmd */
+	for (i = 0; i < test->num_patch_vpec; i++) {
+		test->vpec_cmd[test->patch_vpec_index[i] + 0] = lower_32_bits(vpep_cmd_bo.addr) + test->patch_vpec_offset[i];
+		test->vpec_cmd[test->patch_vpec_index[i] + 1] = upper_32_bits(vpep_cmd_bo.addr);
+	}
+	/* patch gpu addr of src/dst plane */
+	for (i = 0; i < test->num_patch_plane; i++) {
+		test->vpep_cmd[test->patch_src_plane[i] + 0] = lower_32_bits(src_plane_bo.addr);
+		test->vpep_cmd[test->patch_src_plane[i] + 1] = upper_32_bits(src_plane_bo.addr);
+
+		test->vpep_cmd[test->patch_dst_plane[i] + 0] = lower_32_bits(dst_plane_bo.addr);
+		test->vpep_cmd[test->patch_dst_plane[i] + 1] = upper_32_bits(dst_plane_bo.addr);
+	}
+	r = amdgpu_bo_cpu_map(vpep_cmd_bo.handle, (void **)&vpep_cmd_bo.ptr);
+	igt_assert_eq(r, 0);
+	memset(vpep_cmd_bo.ptr, 0, test->vpep_cmd_size);
+	memcpy(vpep_cmd_bo.ptr, test->vpep_cmd, test->vpep_cmd_size);
+	r = amdgpu_bo_cpu_unmap(vpep_cmd_bo.handle);
+	igt_assert_eq(r, 0);
+
+	context->resources[context->num_resources++] = context->ib_handle;
 	context->resources[context->num_resources++] = vpep_cmd_bo.handle;
 	context->resources[context->num_resources++] = src_plane_bo.handle;
 	context->resources[context->num_resources++] = dst_plane_bo.handle;
 
-	/* plane config gpu addr */
-	*(uint64_t *)(vpec_csc_cmd + 1) = vpep_cmd_bo.addr;
-	/* vpep config0 gpu addr */
-	*(uint64_t *)(vpec_csc_cmd + 4) = vpep_cmd_bo.addr + vpep_config_offsets[0];
-	/* vpep config1 gpu addr */
-	*(uint64_t *)(vpec_csc_cmd + 6) = vpep_cmd_bo.addr + vpep_config_offsets[1];
-	/* vpep config2 gpu addr */
-	*(uint64_t *)(vpec_csc_cmd + 8) = vpep_cmd_bo.addr + vpep_config_offsets[2];
-	/* vpep config3 gpu addr */
-	*(uint64_t *)(vpec_csc_cmd + 10) = vpep_cmd_bo.addr + vpep_config_offsets[3];
-
-	memset(src_plane_bo.ptr, 0, frame_size);
-	memset(dst_plane_bo.ptr, 0, frame_size);
-	create_rgba8888(src_plane_bo.ptr, pitch, height);
-
-	/* gpu address of src */
-	*(uint64_t *)(vpep_csc_cmd + 2) = src_plane_bo.addr;
-	/* gpu address of dst */
-	*(uint64_t *)(vpep_csc_cmd + 8) = dst_plane_bo.addr;
-
-	memset(vpep_cmd_bo.ptr, 0, VPE1_VPEP_CSC_CMD_SIZE);
-	memcpy(vpep_cmd_bo.ptr, vpep_csc_cmd, VPE1_VPEP_CSC_CMD_SIZE);
-
 	memset(context->ib_cpu, 0, IB_SIZE);
-	memcpy(context->ib_cpu, vpec_csc_cmd, VPE1_VPEC_CSC_CMD_SIZE);
-
-	context->resources[context->num_resources++] = context->ib_handle;
-
-	r = submit(device_handle, context, VPE1_VPEC_CSC_CMD_SIZE / 4, AMDGPU_HW_IP_VPE);
+	memcpy(context->ib_cpu, test->vpec_cmd, test->vpec_cmd_size);
+	r = submit(device_handle, context, test->vpec_cmd_size / 4, AMDGPU_HW_IP_VPE);
 	igt_assert_eq(r, 0);
 
-	r = check_argb8888(dst_plane_bo.ptr, pitch, height);
+	r = amdgpu_bo_cpu_map(dst_plane_bo.handle, (void **)&dst_plane_bo.ptr);
 	igt_assert_eq(r, 0);
-
-	r = amdgpu_bo_cpu_unmap(vpep_cmd_bo.handle);
+	r = test->check_dst(dst_plane_bo.ptr, pitch, height);
 	igt_assert_eq(r, 0);
-
-	r = amdgpu_bo_cpu_unmap(src_plane_bo.handle);
-	igt_assert_eq(r, 0);
-
 	r = amdgpu_bo_cpu_unmap(dst_plane_bo.handle);
 	igt_assert_eq(r, 0);
 
 	free_resource(&vpep_cmd_bo);
 	free_resource(&src_plane_bo);
 	free_resource(&dst_plane_bo);
+}
+
+static void amdgpu_cs_vpe1_csc(amdgpu_device_handle device_handle,
+				struct mmd_context *context)
+{
+	static const uint32_t patch_vpec_index[] = { 1, 4, 6, 8, 10, };
+	static const uint32_t patch_vpec_offset[] = { 0x0, 0x34, 0x128, 0x184, 0x1c0, };
+	static const uint32_t patch_src_plane[] = { 2, };
+	static const uint32_t patch_dst_plane[] = { 8, };
+
+	const struct vpe_blit_test test = {
+		.vpec_cmd = vpe1_get_vpec_csc_cmd(),
+		.vpec_cmd_size = VPE1_VPEC_CSC_CMD_SIZE,
+		.vpep_cmd = vpe1_get_vpep_csc_cmd(),
+		.vpep_cmd_size = VPE1_VPEP_CSC_CMD_SIZE,
+		.patch_vpec_index = patch_vpec_index,
+		.patch_vpec_offset = patch_vpec_offset,
+		.num_patch_vpec = ARRAY_SIZE(patch_vpec_index),
+		.patch_src_plane = patch_src_plane,
+		.patch_dst_plane = patch_dst_plane,
+		.num_patch_plane = ARRAY_SIZE(patch_src_plane),
+		.height = 256,
+		.pitch = 1024,
+		.fill_src = create_rgba8888,
+		.check_dst = check_argb8888,
+	};
+
+	amdgpu_cs_vpe_blit_run(device_handle, context, &test);
 }
 
 static void amdgpu_cs_vpe2_hmirror(amdgpu_device_handle device_handle, struct mmd_context *context)
 {
-	int i, r;
-	uint32_t frame_size;
-	struct amdgpu_mmd_bo vpep_cmd_bo, src_plane_bo, dst_plane_bo;
-	/* same height and pitch for input and output */
-	const uint32_t height = 256;
-	const uint32_t pitch = 1024;
-
-	const uint32_t patch_vpec_index[18] = {
+	static const uint32_t patch_vpec_index[] = {
 	 1,  4,  6,  8, 10, 12, 14, 16,
 	18, 20, 22, 24, 26, 28, 30, 32,
 	34, 36, };
-	const uint32_t patch_vpec_offset[18] = {
+	static const uint32_t patch_vpec_offset[] = {
 	0x0000, 0x0080, 0x00c0, 0x0100, 0x0140, 0x01c0, 0x0740, 0x0b80,
 	0x0c40, 0x0cc0, 0x0d40, 0x1280, 0x16c0, 0x1780, 0x1800, 0x18c0,
 	0x1900, 0x19c0, };
-	const uint32_t patch_src_luma[2] = { 2, 8, };
-	const uint32_t patch_dst_luma[2] = { 14, 20, };
+	static const uint32_t patch_src_plane[] = { 2, 8, };
+	static const uint32_t patch_dst_plane[] = { 14, 20, };
 
-	uint32_t *vpec_hmirror_cmd = vpe2_get_vpec_hmirror_cmd();
-	uint32_t *vpep_hmirror_cmd = vpe2_get_vpep_hmirror_cmd();
+	const struct vpe_blit_test test = {
+		.vpec_cmd = vpe2_get_vpec_hmirror_cmd(),
+		.vpec_cmd_size = VPE2_VPEC_HMIRROR_CMD_SIZE,
+		.vpep_cmd = vpe2_get_vpep_hmirror_cmd(),
+		.vpep_cmd_size = VPE2_VPEP_HMIRROR_CMD_SIZE,
+		.patch_vpec_index = patch_vpec_index,
+		.patch_vpec_offset = patch_vpec_offset,
+		.num_patch_vpec = ARRAY_SIZE(patch_vpec_index),
+		.patch_src_plane = patch_src_plane,
+		.patch_dst_plane = patch_dst_plane,
+		.num_patch_plane = ARRAY_SIZE(patch_src_plane),
+		.height = 256,
+		.pitch = 1024,
+		.fill_src = create_rgba8888_hmirror,
+		.check_dst = check_rgba8888_hmirror,
+	};
 
-	frame_size = pitch * height * 4;
-	context->num_resources = 0;
-
-	/* prepare source image buffer and data */
-	alloc_resource(device_handle, &src_plane_bo, frame_size, AMDGPU_GEM_DOMAIN_GTT);
-	r = amdgpu_bo_cpu_map(src_plane_bo.handle, (void **)&src_plane_bo.ptr);
-	igt_assert_eq(r, 0);
-	create_rgba8888_hmirror(src_plane_bo.ptr, pitch, height);
-	r = amdgpu_bo_cpu_unmap(src_plane_bo.handle);
-	igt_assert_eq(r, 0);
-
-	/* prepare destination image buffer */
-	alloc_resource(device_handle, &dst_plane_bo, frame_size, AMDGPU_GEM_DOMAIN_GTT);
-	r = amdgpu_bo_cpu_map(dst_plane_bo.handle, (void **)&dst_plane_bo.ptr);
-	igt_assert_eq(r, 0);
-	memset(dst_plane_bo.ptr, 0, frame_size);
-	r = amdgpu_bo_cpu_unmap(dst_plane_bo.handle);
-	igt_assert_eq(r, 0);
-
-	/* prepare VPEP command buffer and setup command buffer data */
-	alloc_resource(device_handle, &vpep_cmd_bo, VPE2_VPEP_HMIRROR_CMD_SIZE, AMDGPU_GEM_DOMAIN_GTT);
-	/* patch gpu addr of vpep cmd */
-	for (i = 0; i < sizeof(patch_vpec_index) / sizeof(uint32_t); i++) {
-		vpec_hmirror_cmd[patch_vpec_index[i] + 0] = (uint32_t)(vpep_cmd_bo.addr & 0xffffffff) + patch_vpec_offset[i];
-		vpec_hmirror_cmd[patch_vpec_index[i] + 1] = (uint32_t)((vpep_cmd_bo.addr & 0xffffffff00000000) >> 32);
-	}
-	/* patch gpu addr of src/dst plane */
-	for (i = 0; i < sizeof(patch_dst_luma) / sizeof(uint32_t); i++) {
-		vpep_hmirror_cmd[patch_src_luma[i] + 0] =  (uint32_t)(src_plane_bo.addr & 0xffffffff);
-		vpep_hmirror_cmd[patch_src_luma[i] + 1] = (uint32_t)((src_plane_bo.addr & 0xffffffff00000000) >> 32);
-
-		vpep_hmirror_cmd[patch_dst_luma[i] + 0] =  (uint32_t)(dst_plane_bo.addr & 0xffffffff);
-		vpep_hmirror_cmd[patch_dst_luma[i] + 1] = (uint32_t)((dst_plane_bo.addr & 0xffffffff00000000) >> 32);
-	}
-	r = amdgpu_bo_cpu_map(vpep_cmd_bo.handle, (void **)&vpep_cmd_bo.ptr);
-	igt_assert_eq(r, 0);
-	memset(vpep_cmd_bo.ptr, 0, VPE2_VPEP_HMIRROR_CMD_SIZE);
-	memcpy(vpep_cmd_bo.ptr, vpep_hmirror_cmd, VPE2_VPEP_HMIRROR_CMD_SIZE);
-	r = amdgpu_bo_cpu_unmap(vpep_cmd_bo.handle);
-	igt_assert_eq(r, 0);
-
-	context->resources[context->num_resources++] = context->ib_handle;
-	context->resources[context->num_resources++] = vpep_cmd_bo.handle;
-	context->resources[context->num_resources++] = src_plane_bo.handle;
-	context->resources[context->num_resources++] = dst_plane_bo.handle;
-
-	memset(context->ib_cpu, 0, IB_SIZE);
-	memcpy(context->ib_cpu, vpec_hmirror_cmd, VPE2_VPEC_HMIRROR_CMD_SIZE);
-	r = submit(device_handle, context, VPE2_VPEC_HMIRROR_CMD_SIZE / 4, AMDGPU_HW_IP_VPE);
-	igt_assert_eq(r, 0);
-
-	r = amdgpu_bo_cpu_map(dst_plane_bo.handle, (void **)&dst_plane_bo.ptr);
-	igt_assert_eq(r, 0);
-	r = check_rgba8888_hmirror(dst_plane_bo.ptr, pitch, height);
-	igt_assert_eq(r, 0);
-	r = amdgpu_bo_cpu_unmap(dst_plane_bo.handle);
-	igt_assert_eq(r, 0);
-
-	free_resource(&vpep_cmd_bo);
-	free_resource(&src_plane_bo);
-	free_resource(&dst_plane_bo);
+	amdgpu_cs_vpe_blit_run(device_handle, context, &test);
 }
 
 static void amdgpu_cs_vpe3_hmirror(amdgpu_device_handle device_handle, struct mmd_context *context)
 {
-	int i, r;
-	uint32_t frame_size;
-	struct amdgpu_mmd_bo vpep_cmd_bo, src_plane_bo, dst_plane_bo;
-	/* same height and pitch for input and output */
-	const uint32_t height = 256;
-	const uint32_t pitch = 1024;
-
-	const uint32_t patch_vpec_index[26] = {
+	static const uint32_t patch_vpec_index[] = {
 	3,  6,  8,  10, 12, 14, 16, 18,
 	20, 22, 24, 26, 28, 30, 32, 34,
 	36, 38, 40, 42, 44, 46, 48, 50,
 	52, 54, };
-	const uint32_t patch_vpec_offset[26] = {
+	static const uint32_t patch_vpec_offset[] = {
 	0x0000, 0x00c0, 0x0180, 0x01c0, 0x0200, 0x0240, 0x0300, 0x0840, 0x0c80,
 	0x0d00, 0x0e00, 0x0ec0, 0x1400, 0x1840, 0x18c0, 0x19c0, 0x1a80, 0x1fc0,
 	0x2400, 0x2480, 0x2580, 0x2640, 0x26c0, 0x2780, 0x27c0, 0x2880, };
-	const uint32_t patch_src_luma[3] = { 2, 9, 16, };
-	const uint32_t patch_dst_luma[3] = { 23, 30, 37, };
+	static const uint32_t patch_src_plane[] = { 2, 9, 16, };
+	static const uint32_t patch_dst_plane[] = { 23, 30, 37, };
 
-	uint32_t *vpec_hmirror_cmd = vpe3_get_vpec_hmirror_cmd();
-	uint32_t *vpep_hmirror_cmd = vpe3_get_vpep_hmirror_cmd();
+	const struct vpe_blit_test test = {
+		.vpec_cmd = vpe3_get_vpec_hmirror_cmd(),
+		.vpec_cmd_size = VPE3_VPEC_HMIRROR_CMD_SIZE,
+		.vpep_cmd = vpe3_get_vpep_hmirror_cmd(),
+		.vpep_cmd_size = VPE3_VPEP_HMIRROR_CMD_SIZE,
+		.patch_vpec_index = patch_vpec_index,
+		.patch_vpec_offset = patch_vpec_offset,
+		.num_patch_vpec = ARRAY_SIZE(patch_vpec_index),
+		.patch_src_plane = patch_src_plane,
+		.patch_dst_plane = patch_dst_plane,
+		.num_patch_plane = ARRAY_SIZE(patch_src_plane),
+		.height = 256,
+		.pitch = 1024,
+		.fill_src = create_rgba8888_hmirror,
+		.check_dst = check_rgba8888_hmirror,
+	};
 
-	frame_size = pitch * height * 4;
-	context->num_resources = 0;
-
-	/* prepare source image buffer and data */
-	alloc_resource(device_handle, &src_plane_bo, frame_size, AMDGPU_GEM_DOMAIN_GTT);
-	r = amdgpu_bo_cpu_map(src_plane_bo.handle, (void **)&src_plane_bo.ptr);
-	igt_assert_eq(r, 0);
-	create_rgba8888_hmirror(src_plane_bo.ptr, pitch, height);
-	r = amdgpu_bo_cpu_unmap(src_plane_bo.handle);
-	igt_assert_eq(r, 0);
-
-	/* prepare destination image buffer */
-	alloc_resource(device_handle, &dst_plane_bo, frame_size, AMDGPU_GEM_DOMAIN_GTT);
-	r = amdgpu_bo_cpu_map(dst_plane_bo.handle, (void **)&dst_plane_bo.ptr);
-	igt_assert_eq(r, 0);
-	memset(dst_plane_bo.ptr, 0, frame_size);
-	r = amdgpu_bo_cpu_unmap(dst_plane_bo.handle);
-	igt_assert_eq(r, 0);
-
-	/* prepare VPEP command buffer and setup command buffer data */
-	alloc_resource(device_handle, &vpep_cmd_bo, VPE3_VPEP_HMIRROR_CMD_SIZE, AMDGPU_GEM_DOMAIN_GTT);
-	/* patch gpu addr of vpep cmd */
-	for (i = 0; i < sizeof(patch_vpec_index) / sizeof(uint32_t); i++) {
-		vpec_hmirror_cmd[patch_vpec_index[i] + 0] = (uint32_t)(vpep_cmd_bo.addr & 0xffffffff) + patch_vpec_offset[i];
-		vpec_hmirror_cmd[patch_vpec_index[i] + 1] = (uint32_t)((vpep_cmd_bo.addr & 0xffffffff00000000) >> 32);
-	}
-	/* patch gpu addr of src/dst plane */
-	for (i = 0; i < sizeof(patch_dst_luma) / sizeof(uint32_t); i++) {
-		vpep_hmirror_cmd[patch_src_luma[i] + 0] = (uint32_t)(src_plane_bo.addr & 0xffffffff);
-		vpep_hmirror_cmd[patch_src_luma[i] + 1] = (uint32_t)((src_plane_bo.addr & 0xffffffff00000000) >> 32);
-
-		vpep_hmirror_cmd[patch_dst_luma[i] + 0] = (uint32_t)(dst_plane_bo.addr & 0xffffffff);
-		vpep_hmirror_cmd[patch_dst_luma[i] + 1] = (uint32_t)((dst_plane_bo.addr & 0xffffffff00000000) >> 32);
-	}
-	r = amdgpu_bo_cpu_map(vpep_cmd_bo.handle, (void **)&vpep_cmd_bo.ptr);
-	igt_assert_eq(r, 0);
-	memset(vpep_cmd_bo.ptr, 0, VPE3_VPEP_HMIRROR_CMD_SIZE);
-	memcpy(vpep_cmd_bo.ptr, vpep_hmirror_cmd, VPE3_VPEP_HMIRROR_CMD_SIZE);
-	r = amdgpu_bo_cpu_unmap(vpep_cmd_bo.handle);
-	igt_assert_eq(r, 0);
-
-	context->resources[context->num_resources++] = context->ib_handle;
-	context->resources[context->num_resources++] = vpep_cmd_bo.handle;
-	context->resources[context->num_resources++] = src_plane_bo.handle;
-	context->resources[context->num_resources++] = dst_plane_bo.handle;
-
-	memset(context->ib_cpu, 0, IB_SIZE);
-	memcpy(context->ib_cpu, vpec_hmirror_cmd, VPE3_VPEC_HMIRROR_CMD_SIZE);
-	r = submit(device_handle, context, VPE3_VPEC_HMIRROR_CMD_SIZE / 4, AMDGPU_HW_IP_VPE);
-	igt_assert_eq(r, 0);
-
-	r = amdgpu_bo_cpu_map(dst_plane_bo.handle, (void **)&dst_plane_bo.ptr);
-	igt_assert_eq(r, 0);
-	r = check_rgba8888_hmirror(dst_plane_bo.ptr, pitch, height);
-	igt_assert_eq(r, 0);
-	r = amdgpu_bo_cpu_unmap(dst_plane_bo.handle);
-	igt_assert_eq(r, 0);
-
-	free_resource(&vpep_cmd_bo);
-	free_resource(&src_plane_bo);
-	free_resource(&dst_plane_bo);
+	amdgpu_cs_vpe_blit_run(device_handle, context, &test);
 }
 
 static void amdgpu_cs_vpe_blit(amdgpu_device_handle device_handle,

@@ -5,12 +5,12 @@
 
 #include "amd_vpe.h"
 
-static uint32_t vpec_csc_cmd[12] = {
+static uint32_t vpe1_vpec_csc_cmd[12] = {
 0x00000001, 0x33002200, 0xff000021, 0x00000003, 0x33002234, 0xff000021, 0x33002328, 0xff000021,
 0x33002384, 0xff000021, 0x330023c0, 0xff000021,
 };
 
-static uint32_t vpep_csc_cmd[154] = {
+static uint32_t vpe1_vpep_csc_cmd[154] = {
 0x00000002, 0x00000000, 0xbeefbe00, 0xff005678, 0x000003ff, 0x00000000, 0x00ff43ff, 0x00000000,
 0xbeefbe00, 0xff005679, 0x000003ff, 0x00000000, 0x00ff43ff, 0x003b0003, 0x00047808, 0x00000809,
 0x0004780c, 0x000000e4, 0x00047d10, 0x00000009, 0x00047d14, 0x00000101, 0x00047d18, 0x00000000,
@@ -33,24 +33,24 @@ static uint32_t vpep_csc_cmd[154] = {
 0x0004aad4, 0x00000013,
 };
 
-uint32_t *vpe_get_vpec_csc_cmd(void)
+uint32_t *vpe1_get_vpec_csc_cmd(void)
 {
-	return vpec_csc_cmd;
+	return vpe1_vpec_csc_cmd;
 }
 
-uint32_t *vpe_get_vpep_csc_cmd(void)
+uint32_t *vpe1_get_vpep_csc_cmd(void)
 {
-	return vpep_csc_cmd;
+	return vpe1_vpep_csc_cmd;
 }
 
-static uint32_t vpec_hmirror_cmd[38] = {
+static uint32_t vpe2_vpec_hmirror_cmd[38] = {
 0x00000001, 0x00800000, 0xffff8001, 0x00000010, 0x00800080, 0xffff8001, 0x008000c0, 0xffff8001,
 0x00800100, 0xffff8001, 0x00800140, 0xffff8001, 0x008001c0, 0xffff8001, 0x00800740, 0xffff8001,
 0x00800b80, 0xffff8001, 0x00800c40, 0xffff8001, 0x00800cc0, 0xffff8001, 0x00800d40, 0xffff8001,
 0x00801280, 0xffff8001, 0x008016c0, 0xffff8001, 0x00801780, 0xffff8001, 0x00801800, 0xffff8001,
 0x008018c0, 0xffff8001, 0x00801900, 0xffff8001, 0x008019c0, 0xffff8001, };
 
-static uint32_t vpep_hmirror_cmd[1661] = {
+static uint32_t vpe2_vpep_hmirror_cmd[1661] = {
 0x00000202, 0x00000004, 0x00400000, 0xffff8001, 0x400003ff, 0x00000200, 0x00ff01ff, 0x00000004,
 0x00400000, 0xffff8001, 0x400003ff, 0x00000000, 0x00ff01ff, 0x00000000, 0x00500000, 0xffff8001,
 0x400003ff, 0x00000000, 0x00ff01ff, 0x00000000, 0x00500000, 0xffff8001, 0x400003ff, 0x00000200,
@@ -260,12 +260,12 @@ static uint32_t vpep_hmirror_cmd[1661] = {
 0x000b0003, 0x0004ac70, 0x00000000, 0x0004ac74, 0x00000000, 0x0004ac78, 0x00000000, 0x0004ac7c,
 0x00000000, 0x0004abdc, 0x00000000, 0x00047840, 0x00000827, };
 
-uint32_t *vpe_get_vpec_hmirror_cmd(void)
+uint32_t *vpe2_get_vpec_hmirror_cmd(void)
 {
-	return vpec_hmirror_cmd;
+	return vpe2_vpec_hmirror_cmd;
 }
 
-uint32_t *vpe_get_vpep_hmirror_cmd(void)
+uint32_t *vpe2_get_vpep_hmirror_cmd(void)
 {
-	return vpep_hmirror_cmd;
+	return vpe2_vpep_hmirror_cmd;
 }

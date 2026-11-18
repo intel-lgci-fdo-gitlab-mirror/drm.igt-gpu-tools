@@ -1368,6 +1368,17 @@ void intel_bb_destroy(struct intel_bb *ibb)
 		close(ibb->fence);
 	if (ibb->engine_syncobj)
 		syncobj_destroy(ibb->fd, ibb->engine_syncobj);
+	/*
+	 * ibb->engine_id is only set when intel_bb created the exec queue
+	 * itself (a user supplied ctx is never stored there). Destroy it
+	 * together with the batch, otherwise the queue (and the VM and LRC
+	 * it references) stay alive until the fd is closed and are torn down
+	 * in a burst, keeping the GT busy for seconds after the test.
+	 */
+	if (ibb->engine_id) {
+		xe_exec_queue_destroy(ibb->fd, ibb->engine_id);
+		ibb->engine_id = 0;
+	}
 	if (ibb->vm_id && !ibb->ctx)
 		xe_vm_destroy(ibb->fd, ibb->vm_id);
 

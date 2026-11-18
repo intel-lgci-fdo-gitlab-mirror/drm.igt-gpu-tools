@@ -111,3 +111,8 @@ igt@xe_wedged@cold-reset-wedged
 ##################################################################
 igt@xe_err_injection@.*
 ##################################################################
+# Valid Skip: SCRATCH_PAGE + FAULT_MODE not supported on Xe3+
+# and rejected by KMD
+##################################################################
+igt@xe_vm@single-op-map-mirror-over-bound
+##################################################################

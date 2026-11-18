@@ -3,6 +3,9 @@
  * Copyright © 2025 Intel Corporation
  */
 
+#include <fcntl.h>
+#include <sys/stat.h>
+
 #include "igt.h"
 #include "igt_dir.h"
 #include "igt_sysfs.h"
@@ -24,6 +27,103 @@
 
 IGT_TEST_DESCRIPTION("Read entries from sysfs paths.");
 
+static int not_readed_count;
+static int ok_count;
+static int read_fails;
+static int open_fails;
+static int stat_fails;
+
+static int read_sysfs(const char *filename, void *data)
+{
+	struct stat sb;
+	ssize_t bytes_read;
+	char buf[4096];
+	int len;
+	int fd;
+
+	len = data ? to_user_pointer(data) + 1 : 0;
+	if (strlen(filename) <= len || len < 0)
+		len = 0;
+
+	if (lstat(filename, &sb) == -1) {
+		igt_info("Stat fails errno=%d %s\n", errno, filename);
+		stat_fails++;
+		return 0;
+	}
+
+	if ((sb.st_mode & S_IFMT) != S_IFREG) {
+		igt_info("Not a regular file %s\n", filename);
+		not_readed_count++;
+		return 0;
+	}
+
+	if (!(sb.st_mode & 0444)) {
+		igt_info("Not readable %s\n", filename);
+		not_readed_count++;
+		return 0;
+	}
+
+	fd = open(filename, O_RDONLY);
+	if (fd < 0) {
+		if (errno == EISDIR) {
+			igt_info("dir %s\n", filename);
+			not_readed_count++;
+			return 0; /* dir or link */
+		}
+
+		igt_info("Open fails errno=%d %o %s\n", errno, sb.st_mode & 0777, filename);
+		open_fails++;
+
+		return 0;
+	}
+
+	bytes_read = read(fd, buf, sizeof(buf) - 1);
+	if (bytes_read < 0) {
+		if (errno == EIO && !strstr("/power/", filename)) {
+			igt_info("power management EIO %s\n", filename);
+			not_readed_count++;
+			return 0; /* dir or link */
+		}
+
+		igt_info("Read fails errno=%d %s\n", errno, filename);
+		close(fd);
+		read_fails++;
+
+		return 0;
+	}
+
+	buf[bytes_read] = '\0';
+	igt_info("ok %zd\t%s\n", bytes_read, filename + len);
+	ok_count++;
+
+	igt_debug("File %s\nData: %s\n", filename + len, buf);
+	close(fd);
+
+	return 0;
+}
+
+static int process_sysfs(int dirfd)
+{
+	char syspath[PATH_MAX];
+	igt_dir_t *config;
+	int ret;
+
+	igt_dir_get_fd_path(dirfd, syspath, PATH_MAX - 1);
+	igt_info("Reading sysfs files from %s\n", syspath);
+
+	config = igt_dir_create(dirfd);
+	igt_assert_f(config, "Cannot create dir config\n");
+
+	igt_dir_scan_dirfd(config, -1);
+
+	ret = igt_dir_process_files(config, read_sysfs,
+				    from_user_pointer(strlen(syspath)));
+
+	igt_dir_destroy(config);
+
+	return ret;
+}
+
 int igt_main()
 {
 	int fd = -1;
@@ -38,8 +138,16 @@ int igt_main()
 	}
 
 	igt_describe("Read all entries from sysfs path.");
-	igt_subtest("read-all-entries")
-		igt_dir_process_files_simple(sysfs);
+	igt_subtest("read-all-entries") {
+		process_sysfs(sysfs);
+		igt_info("Summary: reads=%d fails=%d not_readed=%d\n", ok_count,
+			 read_fails + open_fails + stat_fails,
+			 not_readed_count);
+
+		igt_assert_eq(read_fails, 0);
+		igt_assert_eq(open_fails, 0);
+		igt_assert_eq(stat_fails, 0);
+	}
 
 	igt_fixture() {
 		close(sysfs);

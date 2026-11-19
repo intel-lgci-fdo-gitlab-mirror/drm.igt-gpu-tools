@@ -207,12 +207,6 @@ test_compute_kernel_with_ccs_mode(void)
 	igt_require(num_gt_with_ccs_mode > 0);
 }
 
-static double elapsed(const struct timeval *start,
-		      const struct timeval *end)
-{
-	return (end->tv_sec - start->tv_sec) + 1e-6*(end->tv_usec - start->tv_usec);
-}
-
 /**
  * SUBTEST: loop-duration-2s
  * Functionality: OpenCL kernel
@@ -228,7 +222,6 @@ test_compute_kernel_loop(uint64_t loop_duration)
 	const struct intel_compute_kernels *kernels;
 	struct user_execenv execenv = { 0 };
 	struct drm_xe_engine_class_instance *hwe;
-	struct timeval start, end;
 	double elapse_time, lower_bound, upper_bound;
 
 	fd = drm_open_driver(DRIVER_XE);
@@ -247,20 +240,23 @@ test_compute_kernel_loop(uint64_t loop_duration)
 	execenv.kernel_size = kernels->loop_kernel_size;
 
 	xe_for_each_engine(fd, hwe) {
+		struct timespec start = {};
+
 		if (hwe->engine_class != DRM_XE_ENGINE_CLASS_COMPUTE)
 			continue;
 
 		igt_info("Running loop_kernel on ccs engine %d\n", hwe->engine_instance);
-		gettimeofday(&start, NULL);
+		igt_nsec_elapsed(&start);
 		igt_assert_f(xe_run_intel_compute_kernel_on_engine(fd, hwe, &execenv,
 								   EXECENV_PREF_SYSTEM),
 			     "Unable to run compute kernel successfully\n");
-		gettimeofday(&end, NULL);
-		elapse_time = elapsed(&start, &end);
+		elapse_time = igt_nsec_elapsed(&start) / 1e9;
 		lower_bound = loop_duration / 1e6 - DURATION_MARGIN;
 		upper_bound = loop_duration / 1e6 + DURATION_MARGIN;
 
-		igt_assert(lower_bound < elapse_time && elapse_time < upper_bound);
+		igt_assert_f(lower_bound < elapse_time && elapse_time < upper_bound,
+			     "Elapsed time %.3fs out of range (%.3fs, %.3fs)\n",
+			     elapse_time, lower_bound, upper_bound);
 	}
 	drm_close_driver(fd);
 }

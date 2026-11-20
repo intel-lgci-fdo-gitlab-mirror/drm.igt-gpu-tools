@@ -46,26 +46,26 @@ static int read_sysfs(const char *filename, void *data)
 		len = 0;
 
 	if (lstat(filename, &sb) == -1) {
-		igt_info("Stat fails errno=%d %s\n", errno, filename);
+		igt_debug("Stat fails errno=%d %s\n", errno, filename);
 		stat_fails++;
 		return 0;
 	}
 
 	if ((sb.st_mode & S_IFMT) != S_IFREG) {
-		igt_info("Not a regular file %s\n", filename);
+		igt_debug("ok not a regular file %s\n", filename);
 		not_read_count++;
 		return 0;
 	}
 
 	if (!(sb.st_mode & 0444)) {
-		igt_info("Not readable %s\n", filename);
+		igt_debug("ok not readable %s\n", filename);
 		not_read_count++;
 		return 0;
 	}
 
 	fd = open(filename, O_RDONLY);
 	if (fd < 0) {
-		igt_info("Open fails errno=%d %o %s\n", errno, sb.st_mode & 0777, filename);
+		igt_debug("Open fails errno=%d %o %s\n", errno, sb.st_mode & 0777, filename);
 		open_fails++;
 
 		return 0;
@@ -74,10 +74,10 @@ static int read_sysfs(const char *filename, void *data)
 	bytes_read = read(fd, buf, sizeof(buf) - 1);
 	if (bytes_read < 0) {
 		if (errno == EIO && strstr(filename, "/power/")) {
-			igt_info("power management EIO %s\n", filename);
+			igt_debug("ok power management EIO %s\n", filename);
 			not_read_count++;
 		} else {
-			igt_info("Read fails errno=%d %s\n", errno, filename);
+			igt_debug("Read fails errno=%d %s\n", errno, filename);
 			read_fails++;
 		}
 
@@ -87,7 +87,7 @@ static int read_sysfs(const char *filename, void *data)
 	}
 
 	buf[bytes_read] = '\0';
-	igt_info("ok %zd\t%s\n", bytes_read, filename + len);
+	igt_debug("ok %zd\t%s\n", bytes_read, filename + len);
 	ok_count++;
 
 	igt_debug("File %s\nData: %s\n", filename + len, buf);

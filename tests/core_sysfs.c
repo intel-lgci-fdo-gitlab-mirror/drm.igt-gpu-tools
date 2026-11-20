@@ -27,7 +27,7 @@
 
 IGT_TEST_DESCRIPTION("Read entries from sysfs paths.");
 
-static int not_readed_count;
+static int not_read_count;
 static int ok_count;
 static int read_fails;
 static int open_fails;
@@ -53,13 +53,13 @@ static int read_sysfs(const char *filename, void *data)
 
 	if ((sb.st_mode & S_IFMT) != S_IFREG) {
 		igt_info("Not a regular file %s\n", filename);
-		not_readed_count++;
+		not_read_count++;
 		return 0;
 	}
 
 	if (!(sb.st_mode & 0444)) {
 		igt_info("Not readable %s\n", filename);
-		not_readed_count++;
+		not_read_count++;
 		return 0;
 	}
 
@@ -75,7 +75,7 @@ static int read_sysfs(const char *filename, void *data)
 	if (bytes_read < 0) {
 		if (errno == EIO && strstr(filename, "/power/")) {
 			igt_info("power management EIO %s\n", filename);
-			not_readed_count++;
+			not_read_count++;
 		} else {
 			igt_info("Read fails errno=%d %s\n", errno, filename);
 			read_fails++;
@@ -136,9 +136,9 @@ int igt_main()
 	igt_describe("Read all entries from sysfs path.");
 	igt_subtest("read-all-entries") {
 		process_sysfs(sysfs);
-		igt_info("Summary: reads=%d fails=%d not_readed=%d\n", ok_count,
+		igt_info("Summary: reads=%d fails=%d not_read=%d\n", ok_count,
 			 read_fails + open_fails + stat_fails,
-			 not_readed_count);
+			 not_read_count);
 
 		igt_assert_eq(read_fails, 0);
 		igt_assert_eq(open_fails, 0);

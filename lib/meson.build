@@ -302,7 +302,9 @@ foreach f: iga64_assembly_sources
 		input: [ f + '.gen.iga64_codes.c', libiga64_asms.extract_objects(f) ],
 		output: name,
 		depend_files: [ 'iga64_macros.h', generate_iga64_codes.path() ],
-		command: [ 'env', 'IGT_SRCDIR=@SOURCE_ROOT@', generate_iga64_codes, '-o', '@OUTPUT@', '-i', '@INPUT0@', '@INPUT1@' ],
+		command: [ 'env', 'IGT_SRCDIR=@SOURCE_ROOT@',
+			   'IGT_IS_CROSS_BUILD=@0@'.format(meson.is_cross_build().to_int()),
+			   generate_iga64_codes, '-o', '@OUTPUT@', '-i', '@INPUT0@', '@INPUT1@' ],
 		console: true,
 	)
 endforeach

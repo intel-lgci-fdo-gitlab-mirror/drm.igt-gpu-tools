@@ -34,6 +34,12 @@ while getopts ':i:o:' opt; do
 done
 OBJ=${@:OPTIND}
 
+if [ "$IGT_IS_CROSS_BUILD" = "1" ]; then
+    warn "INFO: cross-build detected, reusing pre-compiled file $INPUT."
+    cp -p $INPUT $OUTPUT
+    exit 0
+fi
+
 # read all assemblies into ASMS array
 ASMS=()
 while  read -d $'\0' asm; do
@@ -46,7 +52,7 @@ MD5_ASMS="$(md5sum <<< "$(< $IGT_SRCDIR/lib/iga64_macros.h) ${ASMS[@]}" | cut -b
 MD5_PRE="$(grep -Po '(?<=^#define MD5_SUM_IGA64_ASMS )\S{32,32}' $INPUT 2>/dev/null)"
 
 if [ "$MD5_ASMS" = "$MD5_PRE" -a "${FORCE_IGA64_REBUILD:-0}" = "0" ]; then
-    echo "iga64 assemblies not changed, reusing pre-compiled file $INPUT."
+    warn "INFO: iga64 assemblies not changed, reusing pre-compiled file $INPUT."
     cp -p $INPUT $OUTPUT
     exit 0
 fi

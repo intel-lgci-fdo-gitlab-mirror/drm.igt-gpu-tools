@@ -65,12 +65,6 @@ static int read_sysfs(const char *filename, void *data)
 
 	fd = open(filename, O_RDONLY);
 	if (fd < 0) {
-		if (errno == EISDIR) {
-			igt_info("dir %s\n", filename);
-			not_readed_count++;
-			return 0; /* dir or link */
-		}
-
 		igt_info("Open fails errno=%d %o %s\n", errno, sb.st_mode & 0777, filename);
 		open_fails++;
 
@@ -79,15 +73,15 @@ static int read_sysfs(const char *filename, void *data)
 
 	bytes_read = read(fd, buf, sizeof(buf) - 1);
 	if (bytes_read < 0) {
-		if (errno == EIO && !strstr("/power/", filename)) {
+		if (errno == EIO && strstr(filename, "/power/")) {
 			igt_info("power management EIO %s\n", filename);
 			not_readed_count++;
-			return 0; /* dir or link */
+		} else {
+			igt_info("Read fails errno=%d %s\n", errno, filename);
+			read_fails++;
 		}
 
-		igt_info("Read fails errno=%d %s\n", errno, filename);
 		close(fd);
-		read_fails++;
 
 		return 0;
 	}
@@ -108,13 +102,15 @@ static int process_sysfs(int dirfd)
 	igt_dir_t *config;
 	int ret;
 
-	igt_dir_get_fd_path(dirfd, syspath, PATH_MAX - 1);
+	ret = igt_dir_get_fd_path(dirfd, syspath, PATH_MAX - 1);
+	igt_assert_f(ret >= 0, "Cannot get path\n");
 	igt_info("Reading sysfs files from %s\n", syspath);
 
 	config = igt_dir_create(dirfd);
 	igt_assert_f(config, "Cannot create dir config\n");
 
-	igt_dir_scan_dirfd(config, -1);
+	ret = igt_dir_scan_dirfd(config, -1);
+	igt_assert_f(ret >= 0, "Cannot scan dir\n");
 
 	ret = igt_dir_process_files(config, read_sysfs,
 				    from_user_pointer(strlen(syspath)));

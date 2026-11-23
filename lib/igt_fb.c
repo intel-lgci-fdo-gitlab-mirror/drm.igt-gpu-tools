@@ -4803,7 +4803,7 @@ static void create_cairo_surface__convert(int fd, struct igt_fb *fb)
 		igt_assert(blit->base.linear.map);
 
 		/* reading via gtt mmap is slow */
-		cvt.src.slow_reads = is_intel_device(fd);
+		cvt.src.slow_reads = is_intel_device(fd) || is_amdgpu_device(fd);
 	}
 
 	cvt.dst.ptr = blit->shadow_ptr;

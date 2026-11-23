@@ -347,7 +347,7 @@ static bool try_tile[NUM_REFS] = {
 	[I915_TILING_Y] = true,
 	[I915_TILING_4] = true,
 	[I915_TILING_Yf] = true,
-	[I915_TILING_64] = false,
+	[I915_TILING_64] = true,
 };
 
 int main(int argc, char *argv[])

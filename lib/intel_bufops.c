@@ -127,12 +127,14 @@ struct buf_ops {
 	bo_copy linear_to_yf;
 	bo_copy linear_to_ys;
 	bo_copy linear_to_tile4;
+	bo_copy linear_to_tile64;
 	bo_copy to_linear;
 	bo_copy x_to_linear;
 	bo_copy y_to_linear;
 	bo_copy yf_to_linear;
 	bo_copy ys_to_linear;
 	bo_copy tile4_to_linear;
+	bo_copy tile64_to_linear;
 };
 
 static const char *tiling_str(uint32_t tiling)
@@ -428,6 +430,78 @@ static void *tile4_ptr(void *ptr,
 	return ptr + pos;
 }
 
+/*
+ * (x,y) to memory location in tile-64 surface.
+ */
+static void *tile64_ptr(void *ptr,
+			unsigned int x, unsigned int y,
+			unsigned int stride, unsigned int cpp)
+{
+	const int tile_size = 64 * 1024;
+	int tile_width, tile_height;
+	int tile_x, tile_y, _x, _y;
+	int base, vaddr, pos;
+
+	switch (cpp) {
+	case 1:
+		tile_width = 256;
+		tile_height = 256;
+		break;
+	case 2:
+		tile_width = 256;
+		tile_height = 128;
+		break;
+	case 4:
+		tile_width = 128;
+		tile_height = 128;
+		break;
+	case 8:
+	default:
+		tile_width = 128;
+		tile_height = 64;
+		break;
+	}
+
+	tile_x = x / tile_width;
+	tile_y = y / tile_height;
+	_x = x % tile_width;
+	_y = y % tile_height;
+
+	switch (cpp) {
+	case 1:
+		vaddr = (_x & 0xf) | ((_y & 0x3) << 4) |
+			((_x & 0x30) << 2) | ((_y & 0x4) << 6) |
+			((_x & 0x40) << 3) | ((_y & 0x18) << 7) |
+			((_x & 0x80) << 5) | ((_y & 0xe0) << 8);
+		break;
+	case 2:
+		vaddr = ((_x & 0x7) << 1) | ((_y & 0x3) << 4) |
+			((_x & 0x18) << 3) | ((_y & 0x4) << 6) |
+			((_x & 0x20) << 4) | ((_y & 0x18) << 7) |
+			((_x & 0xc0) << 6) | ((_y & 0x60) << 9);
+		break;
+	case 4:
+		vaddr = ((_x & 0x3) << 2) | ((_y & 0x3) << 4) |
+			((_x & 0xc) << 4) | ((_y & 0x4) << 6) |
+			((_x & 0x10) << 5) | ((_y & 0x18) << 7) |
+			((_x & 0x60) << 7) | ((_y & 0x60) << 9);
+		break;
+	case 8:
+	default:
+		vaddr = ((_x & 0x1) << 3) | ((_y & 0x3) << 4) |
+			((_x & 0x6) << 5) | ((_y & 0x4) << 6) |
+			((_x & 0x8) << 6) | ((_y & 0x18) << 7) |
+			((_x & 0x70) << 8) | ((_y & 0x20) << 10);
+		break;
+	}
+
+	/* memory location */
+	base = tile_y * (stride * tile_height) + tile_x * tile_size;
+	pos = base + vaddr;
+	igt_assert((pos & (cpp - 1)) == 0);
+
+	return ptr + pos;
+}
 
 static void *yf_ptr(void *ptr,
 		    unsigned int x, unsigned int y,
@@ -489,6 +563,10 @@ static tile_fn __get_tile_fn_ptr(int fd, int tiling)
 		break;
 	case I915_TILING_4:
 		fn = tile4_ptr;
+		break;
+	case I915_TILING_64:
+		fn = tile64_ptr;
+		break;
 	case I915_TILING_Ys:
 		/* To be implemented */
 		break;
@@ -739,6 +817,13 @@ static void copy_linear_to_tile4(struct buf_ops *bops, struct intel_buf *buf,
 	__copy_linear_to(bops->fd, buf, linear, I915_TILING_4, 0);
 }
 
+static void copy_linear_to_tile64(struct buf_ops *bops, struct intel_buf *buf,
+				  uint32_t *linear)
+{
+	DEBUGFN();
+	__copy_linear_to(bops->fd, buf, linear, I915_TILING_64, 0);
+}
+
 static void __copy_to_linear(int fd, struct intel_buf *buf,
 			     uint32_t *linear, int tiling, uint32_t swizzle)
 {
@@ -804,6 +889,13 @@ static void copy_tile4_to_linear(struct buf_ops *bops, struct intel_buf *buf,
 {
 	DEBUGFN();
 	__copy_to_linear(bops->fd, buf, linear, I915_TILING_4, 0);
+}
+
+static void copy_tile64_to_linear(struct buf_ops *bops, struct intel_buf *buf,
+				  uint32_t *linear)
+{
+	DEBUGFN();
+	__copy_to_linear(bops->fd, buf, linear, I915_TILING_64, 0);
 }
 
 static void copy_linear_to_gtt(struct buf_ops *bops, struct intel_buf *buf,
@@ -898,6 +990,10 @@ void intel_buf_to_linear(struct buf_ops *bops, struct intel_buf *buf,
 		igt_assert(bops->tile4_to_linear);
 		bops->tile4_to_linear(bops, buf, linear);
 		break;
+	case I915_TILING_64:
+		igt_assert(bops->tile64_to_linear);
+		bops->tile64_to_linear(bops, buf, linear);
+		break;
 	}
 
 	if (buf->compression)
@@ -933,6 +1029,10 @@ void linear_to_intel_buf(struct buf_ops *bops, struct intel_buf *buf,
 	case I915_TILING_4:
 		igt_assert(bops->linear_to_tile4);
 		bops->linear_to_tile4(bops, buf, linear);
+		break;
+	case I915_TILING_64:
+		igt_assert(bops->linear_to_tile64);
+		bops->linear_to_tile64(bops, buf, linear);
 		break;
 	}
 
@@ -1628,12 +1728,14 @@ void intel_buf_draw_pattern(struct buf_ops *bops, struct intel_buf *buf,
 	.linear_to_yf       = copy_linear_to_yf, \
 	.linear_to_ys       = copy_linear_to_ys, \
 	.linear_to_tile4    = copy_linear_to_tile4, \
+	.linear_to_tile64   = copy_linear_to_tile64, \
 	.to_linear          = copy_wc_to_linear, \
 	.x_to_linear        = copy_gtt_to_linear, \
 	.y_to_linear        = copy_gtt_to_linear, \
 	.yf_to_linear       = copy_yf_to_linear, \
 	.ys_to_linear       = copy_ys_to_linear, \
-	.tile4_to_linear    = copy_tile4_to_linear
+	.tile4_to_linear    = copy_tile4_to_linear, \
+	.tile64_to_linear   = copy_tile64_to_linear
 
 static const struct buf_ops buf_ops_arr[] = {
 	{
@@ -1648,7 +1750,7 @@ static const struct buf_ops buf_ops_arr[] = {
 
 	{
 		DEFAULT_BUFOPS(12, ~0U),
-		.supported_tiles   = TILE_NONE | TILE_X | TILE_Y | TILE_Yf | TILE_Ys | TILE_4,
+		.supported_tiles   = TILE_NONE | TILE_X | TILE_Y | TILE_Yf | TILE_Ys | TILE_4 | TILE_64,
 	},
 };
 
@@ -1837,6 +1939,9 @@ static struct buf_ops *__buf_ops_create(int fd, bool check_idempotency)
 	if (!is_tiling_supported(bops, I915_TILING_4))
 		igt_debug("Tile4 format not supported\n");
 
+	if (!is_tiling_supported(bops, I915_TILING_64))
+		igt_debug("Tile64 format not supported\n");
+
 	if (check_idempotency) {
 		idempotency_selftest(bops, I915_TILING_X);
 		idempotency_selftest(bops, I915_TILING_Y);
@@ -2001,6 +2106,10 @@ bool buf_ops_set_software_tiling(struct buf_ops *bops,
 
 	case I915_TILING_4:
 		igt_debug("-> use SW on tiling 4\n");
+		break;
+
+	case I915_TILING_64:
+		igt_debug("-> use SW on tiling 64\n");
 		break;
 
 	case I915_TILING_Yf:

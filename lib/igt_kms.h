@@ -154,6 +154,8 @@ const char *kmstest_dsc_output_format_str(int output_format);
 void kmstest_dump_mode(drmModeModeInfo *mode);
 #define HDISPLAY_6K_PER_PIPE 6144
 #define HDISPLAY_5K_PER_PIPE 5120
+#define MAX_UNCOMPRESSED_DOTCLOCK_DISPLAY_30 1350000
+#define MAX_UNCOMPRESSED_DOTCLOCK_WCL 937500
 
 enum hardware_pipe __intel_get_pipe_from_crtc_index(int fd, int crtc_index);
 int kmstest_get_crtc_index_from_id(int fd, int crtc_id);
@@ -1381,6 +1383,7 @@ void igt_sort_connector_modes(drmModeConnector *connector,
 bool igt_max_bpc_constraint(igt_display_t *display, igt_crtc_t *crtc,
 			    igt_output_t *output, int bpc);
 int igt_get_max_dotclock(int fd);
+int intel_get_max_uncompressed_dotclock(int drm_fd, int max_dotclock);
 int intel_get_max_pipe_hdisplay(int drm_fd);
 int igt_get_max_cdclk(int fd);
 int igt_get_current_cdclk(int fd);

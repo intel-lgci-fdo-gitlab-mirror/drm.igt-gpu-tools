@@ -7224,6 +7224,32 @@ int igt_get_current_cdclk(int fd)
 }
 
 /**
+ * intel_get_max_uncompressed_dotclock:
+ * @drm_fd: drm file descriptor
+ * @max_dotclock: Max pixel clock frequency
+ *
+ * Get the maximum pixel clock a single pipe supports without DSC. This
+ * mirrors the kernel's intel_max_uncompressed_dotclock(): above this
+ * limit an uncompressed mode can't be driven by a single pipe, so only
+ * modes below it are guaranteed to use a single pipe irrespective of
+ * DSC support in the sink.
+ *
+ * Returns: The maximum uncompressed pixel clock for a single pipe.
+ */
+int intel_get_max_uncompressed_dotclock(int drm_fd, int max_dotclock)
+{
+	int dev_id = intel_get_drm_devid(drm_fd);
+	int limit = max_dotclock;
+
+	if (IS_WILDCATLAKE(dev_id))
+		limit = MAX_UNCOMPRESSED_DOTCLOCK_WCL;
+	else if (intel_display_ver(dev_id) >= 30)
+		limit = MAX_UNCOMPRESSED_DOTCLOCK_DISPLAY_30;
+
+	return min(max_dotclock, limit);
+}
+
+/**
  * intel_get_max_pipe_hdisplay:
  * @drm_fd: drm file descriptor
  *
@@ -7356,7 +7382,9 @@ bool bigjoiner_mode_found(int drm_fd, drmModeConnector *connector,
  * @mode: libdrm mode to be filled
  *
  * Check if connector supports a mode at the platform's maximum single-pipe
- * hdisplay boundary.
+ * hdisplay boundary. The mode clock must be below the uncompressed single
+ * pipe limit, so that the kernel doesn't fall back to joiner when the sink
+ * doesn't support DSC.
  *
  * Returns: True if a valid non-joiner mode at the boundary is found,
  * false otherwise.
@@ -7365,12 +7393,13 @@ bool intel_boundary_non_joiner_mode_found(int drm_fd, drmModeConnector *connecto
 					  int max_dotclock, drmModeModeInfo *mode)
 {
 	int max_hdisplay = intel_get_max_pipe_hdisplay(drm_fd);
+	int max_uncompressed_dotclock = intel_get_max_uncompressed_dotclock(drm_fd, max_dotclock);
 
 	for (int i = 0; i < connector->count_modes; i++) {
 		drmModeModeInfo *current_mode = &connector->modes[i];
 
 		if (current_mode->hdisplay == max_hdisplay &&
-		    current_mode->clock < max_dotclock &&
+		    current_mode->clock < max_uncompressed_dotclock &&
 		    !mode_needs_joiner_exception(drm_fd, current_mode)) {
 			*mode = *current_mode;
 			return true;

@@ -716,9 +716,7 @@ cursor_leak_test_crtc(data_t *data, igt_crtc_t *crtc, igt_output_t *output)
 	 * Therefore add 2 vblank wait to ensure that all cursor-related
 	 * framebuffers can be removed before counting the framebuffer.
 	 */
-	if (is_intel_device(display->drm_fd))
-		igt_wait_for_vblank_count(crtc,
-					  2);
+	igt_wait_for_vblank_count(crtc, 2);
 
 	/* We should be back to the same framebuffer count as when we started */
 	count2 = intel_gem_fb_count(data);

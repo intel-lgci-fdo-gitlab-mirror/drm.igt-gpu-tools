@@ -271,7 +271,8 @@ amdgpu_memset_dispatch_test(amdgpu_device_handle device_handle,
 }
 
 int
-amdgpu_memcpy_dispatch_test(amdgpu_device_handle device_handle,
+amdgpu_memcpy_dispatch_test_with_bo(amdgpu_bo_handle resident_bo,
+				amdgpu_device_handle device_handle,
 				amdgpu_context_handle context_handle_param,
 				uint32_t ip_type, uint32_t ring, uint32_t priority,
 				uint32_t version, enum cmd_error_type hang,
@@ -279,7 +280,7 @@ amdgpu_memcpy_dispatch_test(amdgpu_device_handle device_handle,
 {
 	amdgpu_context_handle context_handle_free = NULL;
 	amdgpu_context_handle context_handle_in_use = NULL;
-	amdgpu_bo_handle bo_src, bo_dst, bo_shader, bo_cmd, resources[4];
+	amdgpu_bo_handle bo_src, bo_dst, bo_shader, bo_cmd, resources[5];
 	volatile unsigned char *ptr_dst;
 	void *ptr_shader;
 	unsigned char *ptr_src;
@@ -452,7 +453,14 @@ amdgpu_memcpy_dispatch_test(amdgpu_device_handle device_handle,
 	resources[2] = bo_dst;
 	resources[3] = bo_cmd;
 
-	if (!user_queue) {
+	if (!user_queue && resident_bo) {
+		resources[4] = resident_bo;
+		r = amdgpu_bo_list_create(device_handle, 5,
+					  resources, NULL, &bo_list);
+		igt_assert_eq(r, 0);
+	}
+
+	if (!user_queue && !resident_bo) {
 		r = amdgpu_bo_list_create(device_handle, 4, resources, NULL, &bo_list);
 		igt_assert_eq(r, 0);
 	}
@@ -528,6 +536,19 @@ amdgpu_memcpy_dispatch_test(amdgpu_device_handle device_handle,
 
 	free_cmd_base(base_cmd);
 	return r;
+}
+
+int
+amdgpu_memcpy_dispatch_test(amdgpu_device_handle device_handle,
+			    amdgpu_context_handle context_handle_param,
+			    uint32_t ip_type, uint32_t ring, uint32_t priority,
+			    uint32_t version, enum cmd_error_type hang,
+			    struct amdgpu_cs_err_codes *err_codes,
+			    bool user_queue)
+{
+	return amdgpu_memcpy_dispatch_test_with_bo(
+		NULL, device_handle, context_handle_param, ip_type, ring,
+		priority, version, hang, err_codes, user_queue);
 }
 
 static void

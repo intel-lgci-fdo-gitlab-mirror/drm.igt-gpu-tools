@@ -243,6 +243,28 @@ int amdgpu_dispatch_write2hw(struct amdgpu_cmd_base *base, uint64_t shader_addr,
 	return base->cdw - offset_prev;
 }
 
+/*
+ * Clear mmCOMPUTE_RESOURCE_LIMITS and issue PACKET3_DISPATCH_DIRECT, the same
+ * ASIC-independent tail every compute dispatch in this file ends with (see
+ * e.g. the sequences a few lines above amdgpu_dispatch_write2hw()'s callers).
+ * Padded to a PM4 packet boundary with NOPs, same as those call sites.
+ */
+void
+amdgpu_dispatch_write_direct(struct amdgpu_cmd_base *base,
+			     uint32_t dim_x, uint32_t dim_y, uint32_t dim_z)
+{
+	/* clear mmCOMPUTE_RESOURCE_LIMITS */
+	base->emit(base, PACKET3_COMPUTE(PKT3_SET_SH_REG, 1));
+	base->emit(base, 0x215);
+	base->emit(base, 0);
+
+	base->emit(base, PACKET3_COMPUTE(PACKET3_DISPATCH_DIRECT, 3));
+	base->emit(base, dim_x);
+	base->emit(base, dim_y);
+	base->emit(base, dim_z);
+	base->emit_aligned(base, 7, GFX_COMPUTE_NOP);
+}
+
 /**
  * execute_compute_dispatch - Execute a single compute dispatch for memory copy
  * @device: AMDGPU device handle

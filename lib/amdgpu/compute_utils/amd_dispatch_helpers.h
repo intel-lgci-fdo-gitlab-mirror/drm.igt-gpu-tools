@@ -37,6 +37,9 @@ int amdgpu_dispatch_write_sync(struct amdgpu_cmd_base *base_cmd, uint32_t versio
 
 int amdgpu_dispatch_write2hw(struct amdgpu_cmd_base *base_cmd, uint64_t shader_addr, uint32_t version, enum cmd_error_type err);
 
+void amdgpu_dispatch_write_direct(struct amdgpu_cmd_base *base_cmd,
+				  uint32_t dim_x, uint32_t dim_y, uint32_t dim_z);
+
 int execute_compute_dispatch(amdgpu_device_handle device,
 				   uint32_t version,
 				   uint64_t shader_mc_addr,

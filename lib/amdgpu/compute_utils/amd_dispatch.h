@@ -41,6 +41,15 @@ int amdgpu_memcpy_dispatch_test(amdgpu_device_handle device_handle,
 					struct amdgpu_cs_err_codes *err_codes,
 					bool userq);
 
+int amdgpu_memcpy_dispatch_test_with_bo(amdgpu_bo_handle resident_bo,
+					amdgpu_device_handle device_handle,
+					amdgpu_context_handle context_handle,
+					uint32_t ip_type, uint32_t ring,
+					uint32_t priority, uint32_t version,
+					enum cmd_error_type hang,
+					struct amdgpu_cs_err_codes *err_codes,
+					bool userq);
+
 void amdgpu_dispatch_hang_slow_helper(amdgpu_device_handle device_handle,
 				      uint32_t ip_type, const struct pci_addr *pci, bool userq);
 

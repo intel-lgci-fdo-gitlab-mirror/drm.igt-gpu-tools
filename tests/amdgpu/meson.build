@@ -57,6 +57,7 @@ if libdrm_amdgpu.found()
 			  'amd_userptr_invalidation',
 			  'amd_close_race',
 			  'amd_mes_reset',
+			  'amd_spm',
 			]
 	if libdrm_amdgpu.version().version_compare('> 2.4.97')
 		amdgpu_progs +=[ 'amd_syncobj', ]

@@ -190,6 +190,7 @@ if libdrm_amdgpu.found()
 	lib_deps += libdrm_amdgpu
 	lib_sources += [
 		'amdgpu/amd_memory.c',
+		'amdgpu/amd_spm.c',
 		'amdgpu/amd_platform.c',
 		'amdgpu/amd_mes_reset.c',
 		'amdgpu/amd_command_submission.c',

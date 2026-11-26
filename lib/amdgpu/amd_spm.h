@@ -5,12 +5,27 @@
 #include <amdgpu.h>
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 struct amd_spm_capture;
 struct amd_spm_cache_profile;
 struct amdgpu_cmd_base;
 struct drm_amdgpu_info_hw_ip;
+
+enum amd_spm_cache_bench_kind {
+	AMD_SPM_CACHE_BENCH_VECTOR,
+	AMD_SPM_CACHE_BENCH_SCALAR,
+	AMD_SPM_CACHE_BENCH_INSTRUCTION,
+};
+
+struct amd_spm_cache_bench_case {
+	enum amd_spm_cache_bench_kind kind;
+	uint32_t working_set;
+	uint32_t step;
+	uint32_t iterations;
+	uint32_t instructions;
+};
 
 struct amd_spm_ops {
 	int (*build_layout)(struct amd_spm_capture *capture);
@@ -20,6 +35,18 @@ struct amd_spm_ops {
 			  const struct amd_spm_capture *capture);
 	int (*emit_stop_reset)(struct amdgpu_cmd_base *ib,
 			       const struct amd_spm_capture *capture);
+	/*
+	 * Cache working-set/access-pattern/scalar/instruction benchmark
+	 * workload (lib/amdgpu/amd_spm.c, used by tests/amdgpu/amd_spm.c's
+	 * spm-cache-benchmark dynamic subtest). NULL on generations with no
+	 * benchmark shader (e.g. gfx12).
+	 */
+	uint32_t (*build_cache_bench_shader)(void *dst, size_t dst_size,
+					     const struct amd_spm_cache_bench_case *test,
+					     uint32_t gfx_minor);
+	int (*emit_cache_bench_descriptors)(struct amdgpu_cmd_base *ib,
+					    uint64_t source_va, uint64_t destination_va,
+					    uint32_t records);
 };
 
 struct amd_spm_profile {
@@ -91,5 +118,27 @@ int amd_spm_capture_enable_caches(struct amd_spm_capture *capture);
 int amd_spm_capture_read_caches(struct amd_spm_capture *capture,
 				uint32_t *num_samples, uint64_t *counter_sum,
 				struct amd_spm_cache_stats stats[AMD_SPM_CACHE_COUNT]);
+
+/*
+ * Build the cache-benchmark shader for @capture's detected generation into
+ * @dst (a mapped BO of at least @dst_size bytes). Returns the shader size in
+ * bytes, or 0 if this generation has no benchmark shader, or (GFX10 only)
+ * assembling it failed (no llvm-mc, bad mcpu, assembly error).
+ */
+uint32_t amd_spm_capture_build_cache_bench_shader(struct amd_spm_capture *capture,
+						  void *dst, size_t dst_size,
+						  const struct amd_spm_cache_bench_case *test);
+
+/*
+ * Emit the PM4 packets that bind @source_va/@destination_va (a @records-entry
+ * source buffer and a fixed-size destination buffer) as the cache-benchmark
+ * shader's inputs, in whatever form @capture's detected generation needs
+ * (buffer descriptors, raw VAs, ...). Returns 0 on success, -EOPNOTSUPP if
+ * this generation has no benchmark shader.
+ */
+int amd_spm_capture_emit_cache_bench_descriptors(struct amd_spm_capture *capture,
+						 struct amdgpu_cmd_base *ib,
+						 uint64_t source_va, uint64_t destination_va,
+						 uint32_t records);
 
 #endif /* AMD_SPM_H */

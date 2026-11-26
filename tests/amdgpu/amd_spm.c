@@ -10,6 +10,20 @@
 
 #include <time.h>
 
+/*
+ * Mirror every major step to the kernel log (dmesg), not just stdout: the
+ * framework itself already logs subtest start/finish via igt_kmsg() (see
+ * igt_subtest()/igt_dynamic_f() in lib/igt_core.c), but that says nothing
+ * about *what* a subtest is doing while it runs or *why* -- which matters
+ * here since a hung/timed-out dispatch can leave nothing else in dmesg to
+ * explain what the GPU was asked to do right before it wedged.
+ */
+#define SPM_STEP(fmt, ...) \
+	do { \
+		igt_info("[spm] " fmt "\n", ##__VA_ARGS__); \
+		igt_kmsg(KMSG_INFO "%s: " fmt "\n", igt_test_name(), ##__VA_ARGS__); \
+	} while (0)
+
 static void
 print_cache_stats(const struct amd_spm_cache_stats stats[AMD_SPM_CACHE_COUNT],
 		  uint32_t gfx_major)
@@ -155,6 +169,9 @@ run_cache_benchmark(amdgpu_device_handle device, const struct cache_benchmark_ca
 	bool matches;
 	char profile_name[32];
 
+	SPM_STEP("cache-benchmark %s: starting (kind=%d working_set=%u step=%u iterations=%u instructions=%u)",
+		 test->name, test->params.kind, test->params.working_set, test->params.step,
+		 test->params.iterations, test->params.instructions);
 	/* Phase 1: detect the SPM profile and bail out early on unsupported ASICs. */
 	ret = amd_spm_capture_init(&capture, device);
 	igt_assert_eq(ret, 0);
@@ -168,6 +185,10 @@ run_cache_benchmark(amdgpu_device_handle device, const struct cache_benchmark_ca
 		      profile_name);
 	ret = amd_spm_capture_enable_caches(&capture);
 	igt_require_f(ret == 0, "SPM cache counters unavailable: %d\n", ret);
+	SPM_STEP("cache-benchmark %s: profile '%s' (gfx%u.%u) supported, per-cache-block counters enabled",
+		 test->name, profile_name, capture.gfx_major, capture.gfx_minor);
+	SPM_STEP("cache-benchmark %s: allocating source/destination/shader/command buffers",
+		 test->name);
 
 	/*
 	 * Phase 2: allocate the four persistent buffers this case reuses across
@@ -201,6 +222,8 @@ run_cache_benchmark(amdgpu_device_handle device, const struct cache_benchmark_ca
 		      "Cache-benchmark shader unavailable for SPM profile '%s' "
 		      "(no llvm-mc, assembly failed, or unsupported generation)\n",
 		      profile_name);
+	SPM_STEP("cache-benchmark %s: built %u-byte shader for gfx%u.%u",
+		 test->name, shader_bytes, capture.gfx_major, capture.gfx_minor);
 	amdgpu_dispatch_init(AMDGPU_HW_IP_GFX, base, capture.gfx_major);
 	amdgpu_dispatch_write_cumask(base, capture.gfx_major);
 	amdgpu_dispatch_write2hw(base, addresses[2], capture.gfx_major, BACKEND_SE_GC_SHADER_EXEC_SUCCESS);
@@ -218,16 +241,22 @@ run_cache_benchmark(amdgpu_device_handle device, const struct cache_benchmark_ca
 	 * Phase 4: 2 warm-up dispatches (outside the SPM capture window) to get
 	 * the shader resident and caches into steady state before measuring.
 	 */
+	SPM_STEP("cache-benchmark %s: command buffer bound, running 2 warm-up dispatches",
+		 test->name);
 	for (uint32_t dispatch = 0; dispatch < 2; dispatch++)
 		cache_benchmark_submit(device, &capture, resource_list, addresses[3], base->cdw);
 	memset(cpu[1], 0, sizes[1]);
 	/* Phase 5: the 8 measured dispatches, bracketed by the SPM capture window. */
+	SPM_STEP("cache-benchmark %s: warm-up done, starting SPM capture window and 8 measured dispatches",
+		 test->name);
 	ret = amd_spm_capture_start(&capture);
 	igt_assert_eq(ret, 0);
 	igt_assert_eq(clock_gettime(CLOCK_MONOTONIC, &start), 0);
 	for (uint32_t dispatch = 0; dispatch < 8; dispatch++)
 		cache_benchmark_submit(device, &capture, resource_list, addresses[3], base->cdw);
 	igt_assert_eq(clock_gettime(CLOCK_MONOTONIC, &end), 0);
+	SPM_STEP("cache-benchmark %s: measured dispatches finished, stopping SPM capture window and reading results",
+		 test->name);
 	ret = amd_spm_capture_stop(&capture);
 	igt_assert_eq(ret, 0);
 	/*
@@ -271,6 +300,7 @@ run_cache_benchmark(amdgpu_device_handle device, const struct cache_benchmark_ca
 	if (test->params.kind == AMD_SPM_CACHE_BENCH_SCALAR)
 		igt_assert_f(stats[AMD_SPM_CACHE_SCALAR].requests > 0,
 			     "Scalar-load workload produced no sampled scalar-cache activity\n");
+	SPM_STEP("cache-benchmark %s: done, %u samples", test->name, num_samples);
 	/* Phase 8: release everything this case allocated. */
 	amdgpu_bo_list_destroy(resource_list);
 	for (uint32_t index = 0; index < ARRAY_SIZE(buffers); index++)
@@ -297,15 +327,20 @@ run_cpf_busy(amdgpu_device_handle device, struct amd_spm_capture *capture)
 	uint64_t counter_sum = 0;
 	int ret;
 
+	SPM_STEP("spm-cpf-busy: initializing SPM capture to detect the SPM generation/profile");
 	ret = amd_spm_capture_init(capture, device);
 	igt_require_f(ret == 0, "SPM CPF-busy capture unavailable: %d\n", ret);
 
 	igt_info("SPM profile %s: pointer unit %u bytes, data offset %u bytes\n",
 		 capture->profile.name, capture->profile.pointer_granularity,
 		 capture->profile.data_offset);
+	SPM_STEP("spm-cpf-busy: detected SPM profile '%s' (gfx%u.%u)",
+		 capture->profile.name, capture->gfx_major, capture->gfx_minor);
 
+	SPM_STEP("spm-cpf-busy: starting SPM capture window (sampling the CPF-busy counter)");
 	ret = amd_spm_capture_start(capture);
 	igt_assert_eq(ret, 0);
+	SPM_STEP("spm-cpf-busy: submitting a compute dispatch to generate CPF activity to sample");
 	ret = amdgpu_memcpy_dispatch_test_with_bo(capture->ring_bo,
 						  device, capture->context,
 						  AMDGPU_HW_IP_GFX, 0, 0,
@@ -313,6 +348,7 @@ run_cpf_busy(amdgpu_device_handle device, struct amd_spm_capture *capture)
 						  BACKEND_SE_GC_SHADER_EXEC_SUCCESS,
 						  NULL, false);
 	igt_assert_eq(ret, 0);
+	SPM_STEP("spm-cpf-busy: dispatch finished, stopping SPM capture window and reading samples");
 	ret = amd_spm_capture_stop(capture);
 	igt_assert_eq(ret, 0);
 	ret = amd_spm_capture_read(capture, &num_samples, &counter_sum);
@@ -320,6 +356,8 @@ run_cpf_busy(amdgpu_device_handle device, struct amd_spm_capture *capture)
 	igt_assert(num_samples > 0);
 	igt_assert(counter_sum > 0);
 	igt_info("SPM samples %u, CPF busy sum %llu\n",
+		 num_samples, (unsigned long long)counter_sum);
+	SPM_STEP("spm-cpf-busy: done, %u samples, CPF busy sum=%llu",
 		 num_samples, (unsigned long long)counter_sum);
 
 	amd_spm_capture_fini(capture);
@@ -333,6 +371,8 @@ int igt_main()
 	uint32_t major, minor;
 	int fd = -1;
 	int ret;
+
+	igt_kmsg(KMSG_INFO "%s: SPM capture test suite starting\n", igt_test_name());
 
 	igt_fixture() {
 		fd = drm_open_driver(DRIVER_AMDGPU);
@@ -354,16 +394,21 @@ int igt_main()
 		uint32_t num_samples = 0;
 		uint64_t counter_sum = 0;
 
+		SPM_STEP("spm-cache-hit: initializing SPM capture to detect the SPM generation/profile");
 		ret = amd_spm_capture_init(&capture, device);
 		igt_require_f(ret == 0, "SPM capture unavailable: %d\n", ret);
 		ret = amd_spm_capture_enable_caches(&capture);
 		if (ret)
 			amd_spm_capture_fini(&capture);
 		igt_require_f(ret == 0, "SPM cache counters unavailable: %d\n", ret);
+		SPM_STEP("spm-cache-hit: profile '%s' (gfx%u.%u), per-cache-block counters enabled",
+			 capture.profile.name, capture.gfx_major, capture.gfx_minor);
 
+		SPM_STEP("spm-cache-hit: starting SPM capture window");
 		ret = amd_spm_capture_start(&capture);
 		igt_assert_eq(ret, 0);
 		igt_info("SPM cache workload: run 64 compute dispatches\n");
+		SPM_STEP("spm-cache-hit: submitting 64 compute dispatches to generate cache activity");
 		for (unsigned int dispatch = 0; dispatch < 64; dispatch++) {
 			ret = amdgpu_memcpy_dispatch_test_with_bo(capture.ring_bo,
 								  device, capture.context,
@@ -373,6 +418,7 @@ int igt_main()
 								  NULL, false);
 			igt_assert_eq(ret, 0);
 		}
+		SPM_STEP("spm-cache-hit: dispatches finished, stopping SPM capture window and reading results");
 		ret = amd_spm_capture_stop(&capture);
 		igt_assert_eq(ret, 0);
 		ret = amd_spm_capture_read_caches(&capture, &num_samples,
@@ -383,6 +429,7 @@ int igt_main()
 		igt_assert(num_samples > 0);
 		igt_assert(counter_sum > 0);
 		print_cache_stats(stats, capture.gfx_major);
+		SPM_STEP("spm-cache-hit: done, %u samples", num_samples);
 
 		amd_spm_capture_fini(&capture);
 	}
@@ -413,6 +460,7 @@ int igt_main()
 		 * property (nothing touches the GPU on an unsupported part),
 		 * one SKIP line instead of nine.
 		 */
+		SPM_STEP("spm-cache-benchmark: probing SPM profile to check this ASIC has a cache-benchmark shader");
 		probe_ret = amd_spm_capture_init(&probe, device);
 		igt_require_f(probe_ret == 0, "SPM capture unavailable: %d\n", probe_ret);
 		snprintf(probe_name, sizeof(probe_name), "%s", probe.profile.name);
@@ -422,6 +470,8 @@ int igt_main()
 		igt_require_f(matches,
 			      "Detected SPM profile '%s': this cache benchmark has no shader for that ASIC\n",
 			      probe_name);
+		SPM_STEP("spm-cache-benchmark: profile '%s' supported, running %zu benchmark cases",
+			 probe_name, ARRAY_SIZE(cache_benchmarks));
 
 		for (uint32_t index = 0; index < ARRAY_SIZE(cache_benchmarks); index++) {
 			igt_dynamic_f("%s", cache_benchmarks[index].name)

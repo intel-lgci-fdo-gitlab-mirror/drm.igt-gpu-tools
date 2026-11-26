@@ -565,8 +565,8 @@ static void cleanup_crtc(data_t *data)
 	cairo_surface_destroy(data->surface);
 	data->surface = NULL;
 
-	igt_output_set_crtc(data->output, NULL);
-	igt_plane_set_fb(data->primary, NULL);
+	/* Reset all planes, so the cursor FB doesn't stay attached */
+	igt_display_reset(display);
 	igt_display_commit(display);
 
 	igt_remove_fb(data->drm_fd, &data->primary_fb[HWCURSORBUFFER]);
@@ -580,6 +580,10 @@ static void prepare_crtc(data_t *data, int cursor_w, int cursor_h)
 	igt_display_t *display = &data->display;
 	cairo_t *cr;
 	igt_output_t *output = data->output;
+
+	/* Clean up after a failed subtest */
+	if (data->pipe_crc)
+		cleanup_crtc(data);
 
 	igt_display_reset(display);
 
@@ -609,8 +613,6 @@ static void prepare_crtc(data_t *data, int cursor_w, int cursor_h)
 	igt_display_commit(display);
 
 	/* create the pipe_crc object for this pipe */
-	if (data->pipe_crc)
-		igt_pipe_crc_free(data->pipe_crc);
 	data->pipe_crc = igt_crtc_crc_new(data->crtc,
 					  IGT_PIPE_CRC_SOURCE_AUTO);
 
@@ -1321,10 +1323,8 @@ int igt_main_args("e", NULL, help_str, opt_handler, NULL)
 		run_tests_on_pipe(&data);
 
 	igt_fixture() {
-		if (data.pipe_crc != NULL) {
-			igt_pipe_crc_stop(data.pipe_crc);
-			igt_pipe_crc_free(data.pipe_crc);
-		}
+		if (data.pipe_crc)
+			cleanup_crtc(&data);
 
 		igt_display_fini(&data.display);
 		drm_close_driver(data.drm_fd);

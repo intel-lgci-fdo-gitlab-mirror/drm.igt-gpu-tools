@@ -650,9 +650,6 @@ cursor_leak_test_crtc(data_t *data, igt_crtc_t *crtc, igt_output_t *output)
 	igt_output_set_crtc(output, crtc);
 	mode = igt_output_get_mode(output);
 
-	/* Count GEM framebuffers before creating our cursor FB's */
-	count1 = intel_gem_fb_count(data);
-
 	/* Black background FB */
 	igt_create_color_fb(data->drm_fd, mode->hdisplay, mode->vdisplay,
 			    DRM_FORMAT_XRGB8888,
@@ -683,6 +680,14 @@ cursor_leak_test_crtc(data_t *data, igt_crtc_t *crtc, igt_output_t *output)
 
 	igt_plane_set_fb(primary, &background_fb);
 	igt_display_commit2(display, COMMIT_LEGACY);
+
+	/*
+	 * Count after our first commit, which releases FBs left by earlier
+	 * tests, and don't count our own FBs.  This assumes one line per FB
+	 * in the debugfs file, since intel_gem_fb_count() counts the lines.
+	 */
+	igt_wait_for_vblank_count(crtc, 2);
+	count1 = intel_gem_fb_count(data) - (ARRAY_SIZE(cursor_fb) + 1);
 
 	igt_plane_set_position(cursor, 100, 100);
 

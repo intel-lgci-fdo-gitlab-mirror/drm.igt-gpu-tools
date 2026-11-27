@@ -42,10 +42,6 @@ igt@xe_evict_ccs@.*
 igt@xe_exec_reset@long-spin-comp-reuse-many-preempt-threads
 igt@xe_exec_system_allocator@pat-index-madvise-pat-idx-uc-comp-(single|multi)-vma
 ##################################################################
-# Valid skip: Threadgroup-preemption not supported on CRI
-##################################################################
-igt@xe_compute_preempt@compute-threadgroup-preempt
-##################################################################
 # Valid skip: Tests requiring multiple CCS (Compute Command
 # Streamers) engines — CRI exposes only a single CCS engine.
 ##################################################################

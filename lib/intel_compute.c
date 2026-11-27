@@ -2881,7 +2881,7 @@ static const struct {
 		.ip_ver = IP_VER(35, 11),
 		.compute_exec = xe3p_compute_preempt_exec,
 		.compat = COMPAT_DRIVER_XE,
-		.preempt_type = PREEMPT_WMTP,
+		.preempt_type = PREEMPT_TGP | PREEMPT_WMTP,
 	},
 };
 
